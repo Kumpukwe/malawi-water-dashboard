@@ -12,7 +12,7 @@ const db = mysql.createConnection({
     password: process.env.MYSQLPASSWORD,
     database: process.env.MYSQLDATABASE,
     port: process.env.MYSQLPORT,
-     connectionLimit: 10
+    connectionLimit: 10
 });
 
 const ALLOWED_TABLES = [
@@ -30,6 +30,21 @@ const TABLES = [
     "nkhotakota", "nsanje", "ntcheu", "ntchisi", "phalombe",
     "salima", "zomba"
 ];
+
+// Add root route handler
+app.get("/", (req, res) => {
+    res.json({
+        message: "Malawi Water Dashboard API is running",
+        endpoints: {
+            data: "/data?table=nsanje&district=TA_NAME&type=WATER_TYPE",
+            districts: "/districts?table=nsanje",
+            types: "/types?table=nsanje",
+            mapdata: "/mapdata?table=nsanje&district=TA_NAME&type=WATER_TYPE",
+            national: "/national"
+        },
+        example: "/data?table=nsanje"
+    });
+});
 
 app.get("/data", (req, res) => {
     const table = req.query.table || "nsanje";
