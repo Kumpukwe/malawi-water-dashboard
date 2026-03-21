@@ -7,14 +7,21 @@ app.use(cors());
 app.use(express.json());
 
 const db = mysql.createConnection({
-    host: "127.0.0.1",
-    user: "root",
-    password: "",
-    database: "malawi_districts_water"
+    host: process.env.MYSQLHOST,
+    user: process.env.MYSQLUSER,
+    password: process.env.MYSQLPASSWORD,
+    database: process.env.MYSQLDATABASE,
+    port: process.env.MYSQLPORT
 });
 
 db.connect(err => {
-    if (err) throw err;
+    db.connect(err => {
+    if (err) {
+        console.error("Database connection failed:", err);
+    } else {
+        console.log("Connected to MySQL!");
+    }
+});
     console.log("Connected to MySQL!");
 });
 
@@ -144,4 +151,8 @@ app.get("/national", (req, res) => {
     });
 });
 
-app.listen(3000, () => console.log("API running on http://localhost:3000/data"));
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+    console.log(`API running on port ${PORT}`);
+});
