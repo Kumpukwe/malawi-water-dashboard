@@ -11,18 +11,8 @@ const db = mysql.createConnection({
     user: process.env.MYSQLUSER,
     password: process.env.MYSQLPASSWORD,
     database: process.env.MYSQLDATABASE,
-    port: process.env.MYSQLPORT
-});
-
-db.connect(err => {
-    db.connect(err => {
-    if (err) {
-        console.error("Database connection failed:", err);
-    } else {
-        console.log("Connected to MySQL!");
-    }
-});
-    console.log("Connected to MySQL!");
+    port: process.env.MYSQLPORT,
+     connectionLimit: 10
 });
 
 const ALLOWED_TABLES = [
