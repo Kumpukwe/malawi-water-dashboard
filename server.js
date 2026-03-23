@@ -1,24 +1,80 @@
 const express = require('express');
 const mysql = require('mysql');
 const cors = require('cors');
-const app = express();
+require('dotenv').config(); // Add this to load environment variables
 
+const app = express();
 app.use(cors());
 app.use(express.json());
 
-const db = mysql.createConnection({
-    host: process.env.MYSQLHOST,
-    user: process.env.MYSQLUSER,
-    password: process.env.MYSQLPASSWORD,
-    database: process.env.MYSQLDATABASE,
-    port: process.env.MYSQLPORT || 3306
-});
+// Determine environment
+const isDevelopment = process.env.NODE_ENV === 'development';
 
-db.connect(err => {
+// Database configuration based on environment
+let dbConfig;
+
+if (isDevelopment) {
+    // Local XAMPP configuration
+    console.log('🔧 Running in DEVELOPMENT mode with XAMPP');
+    dbConfig = {
+        host: process.env.DB_HOST || 'localhost',
+        user: process.env.DB_USER || 'root',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || 'malawi_districts_water',
+        port: process.env.DB_PORT || 3306,
+        connectionLimit: 10
+    };
+} else {
+    // Railway production configuration
+    console.log('🚀 Running in PRODUCTION mode with Railway MySQL');
+    
+    // Debug: Check if variables exist
+    console.log('Environment variables check:');
+    console.log('MYSQLHOST:', process.env.MYSQLHOST ? '✅ SET' : '❌ MISSING');
+    console.log('MYSQLUSER:', process.env.MYSQLUSER ? '✅ SET' : '❌ MISSING');
+    console.log('MYSQLPASSWORD:', process.env.MYSQLPASSWORD ? '✅ SET' : '❌ MISSING');
+    console.log('MYSQLDATABASE:', process.env.MYSQLDATABASE ? '✅ SET' : '❌ MISSING');
+    console.log('MYSQLPORT:', process.env.MYSQLPORT ? '✅ SET' : '❌ MISSING');
+    
+    dbConfig = {
+        host: process.env.MYSQLHOST,
+        user: process.env.MYSQLUSER,
+        password: process.env.MYSQLPASSWORD,
+        database: process.env.MYSQLDATABASE,
+        port: process.env.MYSQLPORT || 3306,
+        connectionLimit: 10
+    };
+    
+    console.log('Attempting to connect to:', {
+        host: dbConfig.host,
+        user: dbConfig.user,
+        database: dbConfig.database,
+        port: dbConfig.port
+    });
+}
+
+// Create database connection
+const db = mysql.createConnection(dbConfig);
+
+// Test database connection
+db.connect((err) => {
     if (err) {
-        console.error('Database connection failed:', err.message);
+        console.error('❌ Database connection failed!');
+        console.error('Error code:', err.code);
+        console.error('Error message:', err.message);
+        console.error('Error sqlState:', err.sqlState);
+        console.error('Full error:', err);
+        
+        // Log what config was used (without password for security)
+        console.error('Connection config used:', {
+            host: dbConfig.host,
+            user: dbConfig.user,
+            database: dbConfig.database,
+            port: dbConfig.port,
+            hasPassword: !!dbConfig.password
+        });
     } else {
-        console.log('Connected to MySQL database!');
+        console.log(`✅ Connected to MySQL database (${isDevelopment ? 'XAMPP' : 'Railway'})`);
     }
 });
 
@@ -39,7 +95,10 @@ const TABLES = [
 ];
 
 app.get("/", (req, res) => {
-    res.json({ message: "Malawi Water Dashboard API is running!" });
+    res.json({ 
+        message: "Malawi Water Dashboard API is running!",
+        environment: isDevelopment ? "Development (XAMPP)" : "Production (Railway)"
+    });
 });
 
 app.get("/test-db", (req, res) => {
