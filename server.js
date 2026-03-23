@@ -1,5 +1,5 @@
 const express = require('express');
-const mysql = require('mysql');
+const mysql = require('mysql2');  // ← CHANGED FROM 'mysql' TO 'mysql2'
 const cors = require('cors');
 const dotenv = require('dotenv');
 
@@ -9,7 +9,7 @@ dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static(__dirname)); // ← THIS LINE SERVES YOUR HTML, CSS, JS FILES
+app.use(express.static(__dirname)); // Serve static files
 
 // Determine environment
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -72,12 +72,12 @@ const TABLES = [
     "salima", "zomba"
 ];
 
-// Root endpoint - SERVE THE HTML DASHBOARD
+// Root endpoint - serve the dashboard
 app.get("/", (req, res) => {
     res.sendFile(__dirname + "/index.html");
 });
 
-// API info endpoint (optional - for developers)
+// API info endpoint
 app.get("/api-info", (req, res) => {
     res.json({
         message: "Malawi Water Dashboard API is running",
