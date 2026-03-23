@@ -1,12 +1,15 @@
 const express = require('express');
-const mysql = require('mysql2');  // ← TO THIS
+const mysql = require('mysql');
 const cors = require('cors');
-require('dotenv').config();
+const dotenv = require('dotenv');
+
+// Load environment variables
+dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static(__dirname)); // ← ADD THIS LINE HERE
+app.use(express.static(__dirname)); // Serve static files (index.html, script.js)
 
 // Determine environment
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -15,7 +18,7 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 let dbConfig;
 
 if (isDevelopment) {
-    // Local XAMPP configuration
+    // LOCAL XAMPP CONFIGURATION
     console.log('🔧 Running in DEVELOPMENT mode with XAMPP');
     dbConfig = {
         host: process.env.DB_HOST || 'localhost',
@@ -26,17 +29,8 @@ if (isDevelopment) {
         connectionLimit: 10
     };
 } else {
-    // Railway production configuration
+    // RAILWAY PRODUCTION CONFIGURATION
     console.log('🚀 Running in PRODUCTION mode with Railway MySQL');
-    
-    // Debug: Check if variables exist
-    console.log('Environment variables check:');
-    console.log('MYSQLHOST:', process.env.MYSQLHOST ? '✅ SET' : '❌ MISSING');
-    console.log('MYSQLUSER:', process.env.MYSQLUSER ? '✅ SET' : '❌ MISSING');
-    console.log('MYSQLPASSWORD:', process.env.MYSQLPASSWORD ? '✅ SET' : '❌ MISSING');
-    console.log('MYSQLDATABASE:', process.env.MYSQLDATABASE ? '✅ SET' : '❌ MISSING');
-    console.log('MYSQLPORT:', process.env.MYSQLPORT ? '✅ SET' : '❌ MISSING');
-    
     dbConfig = {
         host: process.env.MYSQLHOST,
         user: process.env.MYSQLUSER,
@@ -45,13 +39,6 @@ if (isDevelopment) {
         port: process.env.MYSQLPORT || 3306,
         connectionLimit: 10
     };
-    
-    console.log('Attempting to connect to:', {
-        host: dbConfig.host,
-        user: dbConfig.user,
-        database: dbConfig.database,
-        port: dbConfig.port
-    });
 }
 
 // Create database connection
@@ -60,19 +47,9 @@ const db = mysql.createConnection(dbConfig);
 // Test database connection
 db.connect((err) => {
     if (err) {
-        console.error('❌ Database connection failed!');
-        console.error('Error code:', err.code);
-        console.error('Error message:', err.message);
-        console.error('Error sqlState:', err.sqlState);
-        console.error('Full error:', err);
-        
-        // Log what config was used (without password for security)
-        console.error('Connection config used:', {
-            host: dbConfig.host,
-            user: dbConfig.user,
-            database: dbConfig.database,
-            port: dbConfig.port,
-            hasPassword: !!dbConfig.password
+        console.error('❌ Database connection failed:', {
+            environment: isDevelopment ? 'XAMPP' : 'Railway',
+            error: err.message
         });
     } else {
         console.log(`✅ Connected to MySQL database (${isDevelopment ? 'XAMPP' : 'Railway'})`);
@@ -95,20 +72,46 @@ const TABLES = [
     "salima", "zomba"
 ];
 
+// Root endpoint - serve the dashboard
 app.get("/", (req, res) => {
-    res.json({ 
-        message: "Malawi Water Dashboard API is running!",
-        environment: isDevelopment ? "Development (XAMPP)" : "Production (Railway)"
+    res.sendFile(__dirname + "/index.html");
+});
+
+// API info endpoint
+app.get("/api-info", (req, res) => {
+    res.json({
+        message: "Malawi Water Dashboard API is running",
+        environment: isDevelopment ? "Development (XAMPP)" : "Production (Railway)",
+        endpoints: {
+            data: "/data?table=nsanje&district=TA_NAME&type=WATER_TYPE",
+            districts: "/districts?table=nsanje",
+            types: "/types?table=nsanje",
+            mapdata: "/mapdata?table=nsanje&district=TA_NAME&type=WATER_TYPE",
+            national: "/national",
+            test: "/test-db"
+        }
     });
 });
 
+// Test database endpoint
 app.get("/test-db", (req, res) => {
-    db.query("SELECT 1 AS result, NOW() AS time, DATABASE() AS db", (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true, data: results[0] });
+    db.query("SELECT 1 + 1 AS result, NOW() AS server_time, DATABASE() AS current_database", (err, results) => {
+        if (err) {
+            return res.status(500).json({ 
+                error: "Database connection failed", 
+                details: err.message,
+                environment: isDevelopment ? "development" : "production"
+            });
+        }
+        res.json({ 
+            success: true, 
+            message: `Database connected successfully (${isDevelopment ? 'XAMPP' : 'Railway'})`,
+            data: results[0]
+        });
     });
 });
 
+// Data endpoint
 app.get("/data", (req, res) => {
     const table = req.query.table || "nsanje";
     const TA = req.query.district;
@@ -144,6 +147,7 @@ app.get("/data", (req, res) => {
     });
 });
 
+// Districts endpoint
 app.get("/districts", (req, res) => {
     const table = req.query.table || "nsanje";
 
@@ -157,6 +161,7 @@ app.get("/districts", (req, res) => {
     });
 });
 
+// Types endpoint
 app.get("/types", (req, res) => {
     const table = req.query.table || "nsanje";
 
@@ -170,6 +175,7 @@ app.get("/types", (req, res) => {
     });
 });
 
+// Map data endpoint
 app.get("/mapdata", (req, res) => {
     const table = req.query.table || "nsanje";
     const TA = req.query.district;
@@ -198,9 +204,10 @@ app.get("/mapdata", (req, res) => {
     });
 });
 
+// National endpoint
 app.get("/national", (req, res) => {
-    const queries = TABLES.map(table =>
-        `SELECT '${table}' AS district,
+    const queries = TABLES.map(table => 
+        `SELECT '${table}' AS district, 
         COUNT(*) AS total,
         SUM(CASE WHEN \`Functionality_Status\` = 'Functional' THEN 1 ELSE 0 END) AS functional,
         SUM(CASE WHEN \`Functionality_Status\` = 'Not functional' THEN 1 ELSE 0 END) AS not_functional,
@@ -218,4 +225,7 @@ app.get("/national", (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`API running on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`🚀 API running on port ${PORT}`);
+    console.log(`📊 Environment: ${isDevelopment ? 'DEVELOPMENT (XAMPP)' : 'PRODUCTION (Railway)'}`);
+});
