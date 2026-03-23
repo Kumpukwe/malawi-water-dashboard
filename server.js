@@ -1,6 +1,5 @@
 const express = require('express');
-const mysql = require('mysql2');  // ← CHANGED FROM 'mysql' TO 'mysql2'
-const cors = require('cors');
+const mysql = require('mysql2'); 
 const dotenv = require('dotenv');
 
 // Load environment variables
