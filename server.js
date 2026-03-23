@@ -11,8 +11,15 @@ const db = mysql.createConnection({
     user: process.env.MYSQLUSER,
     password: process.env.MYSQLPASSWORD,
     database: process.env.MYSQLDATABASE,
-    port: process.env.MYSQLPORT,
-    connectionLimit: 10
+    port: process.env.MYSQLPORT || 3306
+});
+
+db.connect(err => {
+    if (err) {
+        console.error('Database connection failed:', err.message);
+    } else {
+        console.log('Connected to MySQL database!');
+    }
 });
 
 const ALLOWED_TABLES = [
@@ -31,18 +38,14 @@ const TABLES = [
     "salima", "zomba"
 ];
 
-// Add root route handler
 app.get("/", (req, res) => {
-    res.json({
-        message: "Malawi Water Dashboard API is running",
-        endpoints: {
-            data: "/data?table=nsanje&district=TA_NAME&type=WATER_TYPE",
-            districts: "/districts?table=nsanje",
-            types: "/types?table=nsanje",
-            mapdata: "/mapdata?table=nsanje&district=TA_NAME&type=WATER_TYPE",
-            national: "/national"
-        },
-        example: "/data?table=nsanje"
+    res.json({ message: "Malawi Water Dashboard API is running!" });
+});
+
+app.get("/test-db", (req, res) => {
+    db.query("SELECT 1 AS result, NOW() AS time, DATABASE() AS db", (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, data: results[0] });
     });
 });
 
@@ -56,7 +59,6 @@ app.get("/data", (req, res) => {
     }
 
     let sql = `SELECT \`Functionality_Status\` AS status, COUNT(*) AS total FROM \`${table}\``;
-
     const params = [];
     const conditions = [];
 
@@ -118,7 +120,6 @@ app.get("/mapdata", (req, res) => {
     }
 
     let sql = `SELECT Name, Type, Latitude, Longitude, Functionality_Status AS status FROM \`${table}\` WHERE Latitude IS NOT NULL AND Longitude IS NOT NULL`;
-
     const params = [];
 
     if (TA) {
@@ -138,8 +139,8 @@ app.get("/mapdata", (req, res) => {
 });
 
 app.get("/national", (req, res) => {
-    const queries = TABLES.map(table => 
-        `SELECT '${table}' AS district, 
+    const queries = TABLES.map(table =>
+        `SELECT '${table}' AS district,
         COUNT(*) AS total,
         SUM(CASE WHEN \`Functionality_Status\` = 'Functional' THEN 1 ELSE 0 END) AS functional,
         SUM(CASE WHEN \`Functionality_Status\` = 'Not functional' THEN 1 ELSE 0 END) AS not_functional,
@@ -157,7 +158,4 @@ app.get("/national", (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-    console.log(`API running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`API running on port ${PORT}`));

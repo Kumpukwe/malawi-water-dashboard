@@ -1,235 +1,222 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Malawi Water Point Dashboard</title>
-    <link rel="stylesheet" href="leaflet.css" />
-    <style>
+const express = require('express');
+const mysql = require('mysql');
+const cors = require('cors');
+const dotenv = require('dotenv');
 
-        .export-btn {
-    margin-top: 16px;
-    padding: 10px 20px;
-    background: #1d4ed8;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: bold;
-    cursor: pointer;
+// Load environment variables
+dotenv.config();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// Determine environment
+const isDevelopment = process.env.NODE_ENV === 'development';
+
+// Database configuration based on environment
+let dbConfig;
+
+if (isDevelopment) {
+    // LOCAL XAMPP CONFIGURATION
+    console.log('🔧 Running in DEVELOPMENT mode with XAMPP');
+    dbConfig = {
+        host: process.env.DB_HOST || 'localhost',
+        user: process.env.DB_USER || 'root',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || 'malawi_districts_water',
+        port: process.env.DB_PORT || 3306,
+        connectionLimit: 10
+    };
+} else {
+    // RAILWAY PRODUCTION CONFIGURATION
+    console.log('🚀 Running in PRODUCTION mode with Railway MySQL');
+    dbConfig = {
+        host: process.env.MYSQLHOST,
+        user: process.env.MYSQLUSER,
+        password: process.env.MYSQLPASSWORD,
+        database: process.env.MYSQLDATABASE,
+        port: process.env.MYSQLPORT || 3306,
+        connectionLimit: 10
+    };
 }
-.export-btn:hover { background: #1e40af; }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 16px; background: #f3f4f6; }
-        h1 { color: #1d4ed8; font-size: clamp(18px, 4vw, 28px); margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #e5e7eb; }
-        h2 { color: #374151; margin: 24px 0 12px 0; font-size: clamp(15px, 3vw, 20px); }
 
-        /* TABS */
-        .tabs { display: flex; gap: 0; margin-bottom: 24px; border-bottom: 2px solid #e5e7eb; overflow-x: auto; }
-        .tab { padding: 10px 20px; cursor: pointer; font-size: 14px; font-weight: bold; color: #6b7280; border-bottom: 3px solid transparent; margin-bottom: -2px; white-space: nowrap; }
-        .tab.active { color: #1d4ed8; border-bottom-color: #1d4ed8; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
+// Create database connection
+const db = mysql.createConnection(dbConfig);
 
-        /* FILTERS */
-        .filters { display: flex; gap: 12px; margin-bottom: 20px; align-items: flex-end; flex-wrap: wrap; }
-        .filter-group { display: flex; flex-direction: column; gap: 4px; }
-        .filters label { font-weight: bold; color: #374151; font-size: 13px; }
-        select { padding: 8px 12px; font-size: 14px; border-radius: 6px; border: 1px solid #ccc; background: white; width: 100%; }
+// Test database connection
+db.connect((err) => {
+    if (err) {
+        console.error('❌ Database connection failed:', {
+            environment: isDevelopment ? 'XAMPP' : 'Railway',
+            error: err.message
+        });
+    } else {
+        console.log(`✅ Connected to MySQL database (${isDevelopment ? 'XAMPP' : 'Railway'})`);
+    }
+});
 
-        /* CARDS */
-        .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
-        .card { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 5px solid #ccc; }
-        .card h3 { margin: 0 0 8px 0; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
-        .card .value { font-size: clamp(20px, 4vw, 32px); font-weight: bold; color: #111; }
-        .card .sub { font-size: 12px; color: #6b7280; margin-top: 4px; }
-        .card.total { border-left-color: #2563eb; }
-        .card.functional { border-left-color: #16a34a; }
-        .card.partial { border-left-color: #d97706; }
-        .card.notfunctional { border-left-color: #dc2626; }
-        .card.abandoned { border-left-color: #6b7280; }
+const ALLOWED_TABLES = [
+    "nsanje", "chikwawa", "blantyre", "chiradzulo", "thyolo",
+    "mulanje", "phalombe", "zomba", "machinga", "mangochi",
+    "balaka", "ntcheu", "dedza", "salima", "lilongwe",
+    "mchinji", "dowa", "ntchisi", "kasungu", "nkhotakota",
+    "nkhatabay", "mzimba", "karonga", "chitipa", "likoma"
+];
 
-        /* CHARTS */
-        .charts-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; align-items: flex-start; }
-        .chart-box { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-        canvas { max-width: 100%; }
+const TABLES = [
+    "balaka", "blantyre", "chitipa", "dedza", "dowa",
+    "karonga", "kasungu", "likoma", "lilongwe", "machinga",
+    "mangochi", "mchinji", "mulanje", "mzimba", "nkhatabay",
+    "nkhotakota", "nsanje", "ntcheu", "ntchisi", "phalombe",
+    "salima", "zomba"
+];
 
-        /* MAP */
-        #map { width: 100%; height: 400px; margin: 16px 0; border-radius: 10px; border: 1px solid #e5e7eb; }
+// Root endpoint
+app.get("/", (req, res) => {
+    res.json({
+        message: "Malawi Water Dashboard API is running",
+        environment: isDevelopment ? "Development (XAMPP)" : "Production (Railway)",
+        endpoints: {
+            data: "/data?table=nsanje&district=TA_NAME&type=WATER_TYPE",
+            districts: "/districts?table=nsanje",
+            types: "/types?table=nsanje",
+            mapdata: "/mapdata?table=nsanje&district=TA_NAME&type=WATER_TYPE",
+            national: "/national",
+            test: "/test-db"
+        },
+        example: "/data?table=nsanje"
+    });
+});
 
-        /* TABLE */
-        .table-wrapper { overflow-x: auto; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-top: 10px; }
-        table { width: 100%; border-collapse: collapse; background: white; min-width: 400px; }
-        thead { background-color: #1d4ed8; color: white; }
-        th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #e5e7eb; font-size: 14px; white-space: nowrap; }
-        tbody tr:hover { background-color: #f3f4f6; }
-        tfoot td { background-color: #f9fafb; font-weight: bold; }
-        .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
-
-        /* MAP LEGEND */
-        .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; font-size: 13px; }
-        .legend-item { display: flex; align-items: center; gap: 6px; }
-        .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
-
-        /* MOBILE */
-        @media (max-width: 600px) {
-            body { padding: 10px; }
-            .filters { flex-direction: column; align-items: stretch; }
-            .filter-group { width: 100%; }
-            #map { height: 300px; }
-            .tab { padding: 8px 14px; font-size: 13px; }
+// Test database endpoint
+app.get("/test-db", (req, res) => {
+    db.query("SELECT 1 + 1 AS result, NOW() AS server_time, DATABASE() AS current_database", (err, results) => {
+        if (err) {
+            return res.status(500).json({ 
+                error: "Database connection failed",
+                details: err.message,
+                environment: isDevelopment ? "development" : "production"
+            });
         }
-    </style>
-</head>
-<body>
-    <h1>🇲🇼 Malawi Water Point Functionality Dashboard</h1>
+        res.json({ 
+            success: true, 
+            message: `Database connected successfully (${isDevelopment ? 'XAMPP' : 'Railway'})`,
+            data: results[0]
+        });
+    });
+});
 
-    <!-- TABS -->
-    <div class="tabs">
-        <div class="tab active" onclick="switchTab('district')">📍 District View</div>
-        <div class="tab" onclick="switchTab('national')">🌍 National Overview</div>
-    </div>
+app.get("/data", (req, res) => {
+    const table = req.query.table || "nsanje";
+    const TA = req.query.district;
+    const type = req.query.type;
 
-    <!-- DISTRICT VIEW -->
-    <div id="districtTab" class="tab-content active">
+    if (!ALLOWED_TABLES.includes(table.toLowerCase())) {
+        return res.status(400).json({ error: "Invalid table" });
+    }
 
-        <div class="filters">
-            <div class="filter-group">
-                <label for="tableSelect">District</label>
-                <select id="tableSelect">
-                    <option value="balaka">Balaka</option>
-                    <option value="blantyre">Blantyre</option>
-                    <option value="chitipa">Chitipa</option>
-                    <option value="dedza">Dedza</option>
-                    <option value="dowa">Dowa</option>
-                    <option value="karonga">Karonga</option>
-                    <option value="kasungu">Kasungu</option>
-                    <option value="likoma">Likoma</option>
-                    <option value="lilongwe">Lilongwe</option>
-                    <option value="machinga">Machinga</option>
-                    <option value="mangochi">Mangochi</option>
-                    <option value="mchinji">Mchinji</option>
-                    <option value="mulanje">Mulanje</option>
-                    <option value="mzimba">Mzimba</option>
-                    <option value="nkhatabay">NkhataBay</option>
-                    <option value="nkhotakota">Nkhotakota</option>
-                    <option value="nsanje" selected>Nsanje</option>
-                    <option value="ntcheu">Ntcheu</option>
-                    <option value="ntchisi">Ntchisi</option>
-                    <option value="phalombe">Phalombe</option>
-                    <option value="salima">Salima</option>
-                    <option value="zomba">Zomba</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <label for="districtSelect">TA</label>
-                <select id="districtSelect">
-                    <option value="">All TAs</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <label for="typeSelect">Type</label>
-                <select id="typeSelect">
-                    <option value="">All Types</option>
-                </select>
-            </div>
-        </div>
+    let sql = `SELECT \`Functionality_Status\` AS status, COUNT(*) AS total FROM \`${table}\``;
+    const params = [];
+    const conditions = [];
 
-        <!-- SUMMARY CARDS -->
-        <div class="cards">
-            <div class="card total">
-                <h3>Total Water Points</h3>
-                <div class="value" id="cardTotal">—</div>
-                <div class="sub">across all statuses</div>
-            </div>
-            <div class="card functional">
-                <h3>Functional</h3>
-                <div class="value" id="cardFunctional">—</div>
-                <div class="sub" id="cardFunctionalPct">—</div>
-            </div>
-            <div class="card partial">
-                <h3>Partially Functional</h3>
-                <div class="value" id="cardPartial">—</div>
-                <div class="sub" id="cardPartialPct">—</div>
-            </div>
-            <div class="card notfunctional">
-                <h3>Not Functional</h3>
-                <div class="value" id="cardNotFunctional">—</div>
-                <div class="sub" id="cardNotFunctionalPct">—</div>
-            </div>
-            <div class="card abandoned">
-                <h3>Abandoned</h3>
-                <div class="value" id="cardAbandoned">—</div>
-                <div class="sub" id="cardAbandonedPct">—</div>
-            </div>
-        </div>
+    if (TA) {
+        conditions.push("`TA` = ?");
+        params.push(TA);
+    }
 
-        <h2>🗺️ Water Points Map</h2>
-        <div class="legend">
-            <div class="legend-item"><div class="legend-dot" style="background:#16a34a"></div>Functional</div>
-            <div class="legend-item"><div class="legend-dot" style="background:#d97706"></div>Partially Functional</div>
-            <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div>Not Functional</div>
-            <div class="legend-item"><div class="legend-dot" style="background:#6b7280"></div>Abandoned</div>
-        </div>
-        <div id="map"></div>
+    if (type) {
+        conditions.push("`Type` = ?");
+        params.push(type);
+    }
 
-        <div class="charts-container">
-            <div class="chart-box">
-                <canvas id="barChart"></canvas>
-            </div>
-            <div class="chart-box">
-                <canvas id="doughnutChart"></canvas>
-            </div>
-        </div>
+    if (conditions.length > 0) {
+        sql += " WHERE " + conditions.join(" AND ");
+    }
 
-  <button class="export-btn" onclick="exportCSV('district')">⬇️ Export to CSV</button>
-        <div id="tableContainer"></div>
+    sql += " GROUP BY `Functionality_Status`";
 
-    </div>
+    db.query(sql, params, (err, results) => {
+        if (err) return res.status(500).json(err);
+        res.json(results);
+    });
+});
 
-    <!-- NATIONAL VIEW -->
-    <div id="nationalTab" class="tab-content">
-        <h2>National Overview — All 22 Districts</h2>
+app.get("/districts", (req, res) => {
+    const table = req.query.table || "nsanje";
 
-        <div class="cards">
-            <div class="card total">
-                <h3>Total Water Points</h3>
-                <div class="value" id="natCardTotal">—</div>
-                <div class="sub">all 22 districts</div>
-            </div>
-            <div class="card functional">
-                <h3>Functional</h3>
-                <div class="value" id="natCardFunctional">—</div>
-                <div class="sub" id="natCardFunctionalPct">—</div>
-            </div>
-            <div class="card partial">
-                <h3>Partially Functional</h3>
-                <div class="value" id="natCardPartial">—</div>
-                <div class="sub" id="natCardPartialPct">—</div>
-            </div>
-            <div class="card notfunctional">
-                <h3>Not Functional</h3>
-                <div class="value" id="natCardNotFunctional">—</div>
-                <div class="sub" id="natCardNotFunctionalPct">—</div>
-            </div>
-            <div class="card abandoned">
-                <h3>Abandoned</h3>
-                <div class="value" id="natCardAbandoned">—</div>
-                <div class="sub" id="natCardAbandonedPct">—</div>
-            </div>
-        </div>
+    if (!ALLOWED_TABLES.includes(table.toLowerCase())) {
+        return res.status(400).json({ error: "Invalid table" });
+    }
 
-        <h2>Water Point Status by District</h2>
-        <div class="chart-box">
-            <canvas id="nationalChart"></canvas>
-        </div>
+    db.query(`SELECT DISTINCT \`TA\` FROM \`${table}\` ORDER BY \`TA\``, (err, results) => {
+        if (err) return res.status(500).json(err);
+        res.json(results.map(r => r.TA));
+    });
+});
 
-        <div id="nationalTableContainer"></div>
-<button class="export-btn" onclick="exportCSV('national')">⬇️ Export to CSV</button>
-    </div>
+app.get("/types", (req, res) => {
+    const table = req.query.table || "nsanje";
 
-    <script src="leaflet.js"></script>
-    <script src="chart.min.js"></script>
-    <script src="script.js"></script>
-</body>
-</html>
+    if (!ALLOWED_TABLES.includes(table.toLowerCase())) {
+        return res.status(400).json({ error: "Invalid table" });
+    }
+
+    db.query(`SELECT DISTINCT \`Type\` FROM \`${table}\` ORDER BY \`Type\``, (err, results) => {
+        if (err) return res.status(500).json(err);
+        res.json(results.map(r => r.Type));
+    });
+});
+
+app.get("/mapdata", (req, res) => {
+    const table = req.query.table || "nsanje";
+    const TA = req.query.district;
+    const type = req.query.type;
+
+    if (!ALLOWED_TABLES.includes(table.toLowerCase())) {
+        return res.status(400).json({ error: "Invalid table" });
+    }
+
+    let sql = `SELECT Name, Type, Latitude, Longitude, Functionality_Status AS status FROM \`${table}\` WHERE Latitude IS NOT NULL AND Longitude IS NOT NULL`;
+    const params = [];
+
+    if (TA) {
+        sql += " AND `TA` = ?";
+        params.push(TA);
+    }
+
+    if (type) {
+        sql += " AND `Type` = ?";
+        params.push(type);
+    }
+
+    db.query(sql, params, (err, results) => {
+        if (err) return res.status(500).json(err);
+        res.json(results);
+    });
+});
+
+app.get("/national", (req, res) => {
+    const queries = TABLES.map(table => 
+        `SELECT '${table}' AS district, 
+        COUNT(*) AS total,
+        SUM(CASE WHEN \`Functionality_Status\` = 'Functional' THEN 1 ELSE 0 END) AS functional,
+        SUM(CASE WHEN \`Functionality_Status\` = 'Not functional' THEN 1 ELSE 0 END) AS not_functional,
+        SUM(CASE WHEN \`Functionality_Status\` = 'Partially functional but in need of repair' THEN 1 ELSE 0 END) AS partial,
+        SUM(CASE WHEN \`Functionality_Status\` = 'No longer exists or abandoned' THEN 1 ELSE 0 END) AS abandoned
+        FROM \`${table}\``
+    );
+
+    const sql = queries.join(" UNION ALL ") + " ORDER BY district";
+
+    db.query(sql, (err, results) => {
+        if (err) return res.status(500).json(err);
+        res.json(results);
+    });
+});
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+    console.log(`🚀 API running on port ${PORT}`);
+    console.log(`📊 Environment: ${isDevelopment ? 'DEVELOPMENT (XAMPP)' : 'PRODUCTION (Railway)'}`);
+});
