@@ -9,7 +9,7 @@ dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static(__dirname)); // Serve static files (index.html, script.js)
+app.use(express.static(__dirname)); // ← THIS LINE SERVES YOUR HTML, CSS, JS FILES
 
 // Determine environment
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -72,12 +72,12 @@ const TABLES = [
     "salima", "zomba"
 ];
 
-// Root endpoint - serve the dashboard
+// Root endpoint - SERVE THE HTML DASHBOARD
 app.get("/", (req, res) => {
     res.sendFile(__dirname + "/index.html");
 });
 
-// API info endpoint
+// API info endpoint (optional - for developers)
 app.get("/api-info", (req, res) => {
     res.json({
         message: "Malawi Water Dashboard API is running",
@@ -111,7 +111,6 @@ app.get("/test-db", (req, res) => {
     });
 });
 
-// Data endpoint
 app.get("/data", (req, res) => {
     const table = req.query.table || "nsanje";
     const TA = req.query.district;
@@ -147,7 +146,6 @@ app.get("/data", (req, res) => {
     });
 });
 
-// Districts endpoint
 app.get("/districts", (req, res) => {
     const table = req.query.table || "nsanje";
 
@@ -161,7 +159,6 @@ app.get("/districts", (req, res) => {
     });
 });
 
-// Types endpoint
 app.get("/types", (req, res) => {
     const table = req.query.table || "nsanje";
 
@@ -175,7 +172,6 @@ app.get("/types", (req, res) => {
     });
 });
 
-// Map data endpoint
 app.get("/mapdata", (req, res) => {
     const table = req.query.table || "nsanje";
     const TA = req.query.district;
@@ -204,7 +200,6 @@ app.get("/mapdata", (req, res) => {
     });
 });
 
-// National endpoint
 app.get("/national", (req, res) => {
     const queries = TABLES.map(table => 
         `SELECT '${table}' AS district, 
