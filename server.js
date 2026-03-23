@@ -1,24 +1,20 @@
 const express = require('express');
-const mysql = require('mysql2');  // ← MUST be mysql2, NOT mysql
+const mysql = require('mysql2');
 const cors = require('cors');
 const dotenv = require('dotenv');
 
-// Load environment variables
 dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static(__dirname)); // ← THIS SERVES YOUR HTML FILE
+app.use(express.static(__dirname));
 
-// Determine environment
 const isDevelopment = process.env.NODE_ENV === 'development';
 
-// Database configuration based on environment
 let dbConfig;
 
 if (isDevelopment) {
-    // LOCAL XAMPP CONFIGURATION
     console.log('🔧 Running in DEVELOPMENT mode with XAMPP');
     dbConfig = {
         host: process.env.DB_HOST || 'localhost',
@@ -29,7 +25,6 @@ if (isDevelopment) {
         connectionLimit: 10
     };
 } else {
-    // RAILWAY PRODUCTION CONFIGURATION
     console.log('🚀 Running in PRODUCTION mode with Railway MySQL');
     dbConfig = {
         host: process.env.MYSQLHOST,
@@ -41,18 +36,13 @@ if (isDevelopment) {
     };
 }
 
-// Create database connection
 const db = mysql.createConnection(dbConfig);
 
-// Test database connection
 db.connect((err) => {
     if (err) {
-        console.error('❌ Database connection failed:', {
-            environment: isDevelopment ? 'XAMPP' : 'Railway',
-            error: err.message
-        });
+        console.error('❌ Database connection failed:', err.message);
     } else {
-        console.log(`✅ Connected to MySQL database (${isDevelopment ? 'XAMPP' : 'Railway'})`);
+        console.log(`✅ Connected to MySQL database`);
     }
 });
 
@@ -72,42 +62,16 @@ const TABLES = [
     "salima", "zomba"
 ];
 
-// Root endpoint - SERVE THE DASHBOARD HTML
 app.get("/", (req, res) => {
     res.sendFile(__dirname + "/index.html");
 });
 
-// API info endpoint (optional - for developers)
-app.get("/api-info", (req, res) => {
-    res.json({
-        message: "Malawi Water Dashboard API is running",
-        environment: isDevelopment ? "Development (XAMPP)" : "Production (Railway)",
-        endpoints: {
-            data: "/data?table=nsanje&district=TA_NAME&type=WATER_TYPE",
-            districts: "/districts?table=nsanje",
-            types: "/types?table=nsanje",
-            mapdata: "/mapdata?table=nsanje&district=TA_NAME&type=WATER_TYPE",
-            national: "/national",
-            test: "/test-db"
-        }
-    });
-});
-
-// Test database endpoint
 app.get("/test-db", (req, res) => {
     db.query("SELECT 1 + 1 AS result, NOW() AS server_time, DATABASE() AS current_database", (err, results) => {
         if (err) {
-            return res.status(500).json({ 
-                error: "Database connection failed", 
-                details: err.message,
-                environment: isDevelopment ? "development" : "production"
-            });
+            return res.status(500).json({ error: err.message });
         }
-        res.json({ 
-            success: true, 
-            message: `Database connected successfully (${isDevelopment ? 'XAMPP' : 'Railway'})`,
-            data: results[0]
-        });
+        res.json({ success: true, data: results[0] });
     });
 });
 
@@ -222,5 +186,4 @@ app.get("/national", (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`🚀 API running on port ${PORT}`);
-    console.log(`📊 Environment: ${isDevelopment ? 'DEVELOPMENT (XAMPP)' : 'PRODUCTION (Railway)'}`);
 });
