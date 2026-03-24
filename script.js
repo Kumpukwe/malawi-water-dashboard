@@ -9,6 +9,7 @@ let nationalChart;
 let map;
 let markersLayer;
 let nationalLoaded = false;
+let currentOfficer = null;
 
 const COLORS = ["#16a34a", "#dc2626", "#2563eb", "#d97706", "#7c3aed", "#0891b2"];
 
@@ -74,6 +75,8 @@ function loadNational() {
     fetch(`${API_URL}/national`)
         .then(res => res.json())
         .then(data => {
+            console.log("National data received:", data.length, "districts");
+            
             const districts = data.map(d => d.district.charAt(0).toUpperCase() + d.district.slice(1));
             const totals = data.map(d => Number(d.total));
             const functional = data.map(d => Number(d.functional));
@@ -88,7 +91,7 @@ function loadNational() {
             const grandNotFunctional = notFunctional.reduce((a, b) => a + b, 0);
             const grandAbandoned = abandoned.reduce((a, b) => a + b, 0);
 
-            const pct = (val) => grandTotal > 0 ? ((val / grandTotal) * 100).toFixed(1) + "% of total" : "0%";
+            const pct = (val) => grandTotal > 0 ? ((val / grandTotal) * 100).toFixed(1) + "%" : "0%";
 
             document.getElementById("natCardTotal").textContent = grandTotal.toLocaleString();
             document.getElementById("natCardFunctional").textContent = grandFunctional.toLocaleString();
@@ -107,41 +110,19 @@ function loadNational() {
                 data: {
                     labels: districts,
                     datasets: [
-                        {
-                            label: "Functional",
-                            data: functional,
-                            backgroundColor: "#16a34a"
-                        },
-                        {
-                            label: "Partially Functional",
-                            data: partial,
-                            backgroundColor: "#d97706"
-                        },
-                        {
-                            label: "Not Functional",
-                            data: notFunctional,
-                            backgroundColor: "#dc2626"
-                        },
-                        {
-                            label: "Abandoned",
-                            data: abandoned,
-                            backgroundColor: "#6b7280"
-                        }
+                        { label: "Functional", data: functional, backgroundColor: "#16a34a" },
+                        { label: "Partially Functional", data: partial, backgroundColor: "#d97706" },
+                        { label: "Not Functional", data: notFunctional, backgroundColor: "#dc2626" },
+                        { label: "Abandoned", data: abandoned, backgroundColor: "#6b7280" }
                     ]
                 },
                 options: {
                     responsive: true,
                     plugins: {
                         legend: { display: true, position: "top" },
-                        title: {
-                            display: true,
-                            text: "Water Point Status by District"
-                        }
+                        title: { display: true, text: "Water Point Status by District" }
                     },
-                    scales: {
-                        x: { stacked: true },
-                        y: { stacked: true, beginAtZero: true }
-                    }
+                    scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }
                 }
             });
 
@@ -154,13 +135,7 @@ function loadNational() {
                     <table>
                         <thead>
                             <tr>
-                                <th>District</th>
-                                <th>Total</th>
-                                <th>Functional</th>
-                                <th>Partial</th>
-                                <th>Not Functional</th>
-                                <th>Abandoned</th>
-                                <th>% Functional</th>
+                                <th>District</th><th>Total</th><th>Functional</th><th>Partial</th><th>Not Functional</th><th>Abandoned</th><th>% Functional</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -207,6 +182,16 @@ function initMap() {
         }).addTo(map);
         markersLayer = L.layerGroup().addTo(map);
         console.log("Map initialized successfully");
+        
+        // Add click listener for coordinates
+        map.on('click', function(e) {
+            const modal = document.getElementById('dataEntryModal');
+            if (modal && modal.style.display === 'flex') {
+                document.getElementById('entryLat').value = e.latlng.lat.toFixed(6);
+                document.getElementById('entryLng').value = e.latlng.lng.toFixed(6);
+                showToast('Coordinates added from map click!', 'success');
+            }
+        });
     } catch (error) {
         console.error("Error initializing map:", error);
     }
@@ -219,13 +204,10 @@ function loadDistrictMap(table) {
         const marker = L.marker(coords).addTo(markersLayer);
         marker.bindPopup(`
             <strong>${table.charAt(0).toUpperCase() + table.slice(1)} District</strong><br>
-            Total Water Points: Loading...<br>
             Click to view district data
         `);
         map.setView(coords, 9);
-        console.log(`District marker added for ${table}`);
         
-        // Fetch and display district summary
         fetch(`${API_URL}/data?table=${table}`)
             .then(res => res.json())
             .then(data => {
@@ -234,11 +216,9 @@ function loadDistrictMap(table) {
                     <strong>${table.charAt(0).toUpperCase() + table.slice(1)} District</strong><br>
                     <b>Total Water Points:</b> ${total.toLocaleString()}<br>
                     <b>Functional:</b> ${data.find(d => d.status === 'Functional')?.total || 0}<br>
-                    <b>Not Functional:</b> ${data.find(d => d.status === 'Not functional')?.total || 0}<br>
-                    <a href="#" onclick="document.getElementById('tableSelect').value='${table}';getFilters();">View Details</a>
+                    <b>Not Functional:</b> ${data.find(d => d.status === 'Not functional')?.total || 0}
                 `);
-            })
-            .catch(err => console.error("Error fetching district data:", err));
+            });
     }
 }
 
@@ -247,17 +227,10 @@ function loadMap(table = "nsanje", TA = "", type = "") {
     if (TA) url += `&district=${encodeURIComponent(TA)}`;
     if (type) url += `&type=${encodeURIComponent(type)}`;
 
-    console.log("Loading map data from:", url);
-
     fetch(url)
         .then(res => res.json())
         .then(points => {
-            console.log(`Received ${points.length} points from API`);
-            
-            if (!markersLayer) {
-                initMap();
-            }
-            
+            if (!markersLayer) initMap();
             markersLayer.clearLayers();
 
             const validPoints = points.filter(p => {
@@ -266,50 +239,38 @@ function loadMap(table = "nsanje", TA = "", type = "") {
                 return !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
             });
 
-            console.log(`Valid points to display: ${validPoints.length}`);
-
             if (validPoints.length === 0) {
-                console.log("No water points with coordinates found, showing district center instead");
                 loadDistrictMap(table);
                 return;
             }
 
             const bounds = [];
-
             validPoints.forEach(p => {
                 const lat = parseFloat(p.Latitude);
                 const lng = parseFloat(p.Longitude);
                 const color = getStatusColor(p.status);
 
-                try {
-                    const marker = L.circleMarker([lat, lng], {
-                        radius: 6,
-                        fillColor: color,
-                        color: "#fff",
-                        weight: 1,
-                        opacity: 1,
-                        fillOpacity: 0.85
-                    });
+                const marker = L.circleMarker([lat, lng], {
+                    radius: 6,
+                    fillColor: color,
+                    color: "#fff",
+                    weight: 1,
+                    opacity: 1,
+                    fillOpacity: 0.85
+                });
 
-                    marker.bindPopup(`
-                        <strong>${p.Name || "Unknown"}</strong><br>
-                        <b>Type:</b> ${p.Type || "N/A"}<br>
-                        <b>Status:</b> <span style="color:${color}">${p.status || "N/A"}</span>
-                    `);
+                marker.bindPopup(`
+                    <strong>${p.Name || "Unknown"}</strong><br>
+                    <b>Type:</b> ${p.Type || "N/A"}<br>
+                    <b>Status:</b> <span style="color:${color}">${p.status || "N/A"}</span>
+                `);
 
-                    marker.addTo(markersLayer);
-                    bounds.push([lat, lng]);
-                } catch (markerError) {
-                    console.error("Error creating marker for:", p.Name);
-                }
+                marker.addTo(markersLayer);
+                bounds.push([lat, lng]);
             });
 
             if (bounds.length > 0) {
-                try {
-                    map.fitBounds(bounds, { padding: [30, 30] });
-                } catch (boundsError) {
-                    map.setView([-13.5, 34.0], 7);
-                }
+                map.fitBounds(bounds, { padding: [30, 30] });
             }
         })
         .catch(err => console.error("Map fetch error:", err));
@@ -347,14 +308,16 @@ function loadDistricts(table) {
         .then(districts => {
             const select = document.getElementById("districtSelect");
             select.innerHTML = '<option value="">All TAs</option>';
-            districts.forEach(d => {
-                if (d) {
-                    const opt = document.createElement("option");
-                    opt.value = d;
-                    opt.textContent = d;
-                    select.appendChild(opt);
-                }
-            });
+            if (Array.isArray(districts)) {
+                districts.forEach(d => {
+                    if (d) {
+                        const opt = document.createElement("option");
+                        opt.value = d;
+                        opt.textContent = d;
+                        select.appendChild(opt);
+                    }
+                });
+            }
         })
         .catch(err => console.error("Failed to load TAs:", err));
 }
@@ -365,14 +328,16 @@ function loadTypes(table) {
         .then(types => {
             const select = document.getElementById("typeSelect");
             select.innerHTML = '<option value="">All Types</option>';
-            types.forEach(t => {
-                if (t) {
-                    const opt = document.createElement("option");
-                    opt.value = t;
-                    opt.textContent = t;
-                    select.appendChild(opt);
-                }
-            });
+            if (Array.isArray(types)) {
+                types.forEach(t => {
+                    if (t) {
+                        const opt = document.createElement("option");
+                        opt.value = t;
+                        opt.textContent = t;
+                        select.appendChild(opt);
+                    }
+                });
+            }
         })
         .catch(err => console.error("Failed to load types:", err));
 }
@@ -440,49 +405,19 @@ function fetchData(table = "nsanje", TA = "", type = "") {
             if (barChart) barChart.destroy();
             barChart = new Chart(barCtx, {
                 type: "bar",
-                data: {
-                    labels,
-                    datasets: [{
-                        label: title,
-                        data: counts,
-                        backgroundColor: colors
-                    }]
-                },
+                data: { labels, datasets: [{ label: title, data: counts, backgroundColor: colors }] },
                 options: {
                     responsive: true,
-                    plugins: {
-                        legend: { display: false },
-                        title: {
-                            display: true,
-                            text: `Functionality Status — ${title}`
-                        }
-                    },
-                    scales: {
-                        y: { beginAtZero: true, ticks: { precision: 0 } }
-                    }
+                    plugins: { legend: { display: false }, title: { display: true, text: `Functionality Status — ${title}` } },
+                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
                 }
             });
 
             if (doughnutChart) doughnutChart.destroy();
             doughnutChart = new Chart(doughnutCtx, {
                 type: "doughnut",
-                data: {
-                    labels,
-                    datasets: [{
-                        data: counts,
-                        backgroundColor: colors
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: { display: true, position: "bottom" },
-                        title: {
-                            display: true,
-                            text: `Distribution — ${title}`
-                        }
-                    }
-                }
+                data: { labels, datasets: [{ data: counts, backgroundColor: colors }] },
+                options: { responsive: true, plugins: { legend: { display: true, position: "bottom" }, title: { display: true, text: `Distribution — ${title}` } } }
             });
 
             renderTable(data, title);
@@ -516,64 +451,31 @@ function exportCSV(type) {
     if (type === "district") {
         const table = document.getElementById("tableSelect").value;
         filename = `${table}_water_points.csv`;
-
         rows.push(["Functionality Status", "Count", "Percentage"]);
-
         const tableRows = document.querySelectorAll("#tableContainer tbody tr");
         tableRows.forEach(row => {
             const cells = row.querySelectorAll("td");
-            const status = cells[0].textContent.trim();
-            const count = cells[1].textContent.trim();
-            const pct = cells[2].textContent.trim();
-            rows.push([status, count, pct]);
+            rows.push([cells[0].textContent.trim(), cells[1].textContent.trim(), cells[2].textContent.trim()]);
         });
-
         const totalRow = document.querySelectorAll("#tableContainer tfoot td");
         if (totalRow.length) {
-            rows.push([
-                totalRow[0].textContent.trim(),
-                totalRow[1].textContent.trim(),
-                totalRow[2].textContent.trim()
-            ]);
+            rows.push([totalRow[0].textContent.trim(), totalRow[1].textContent.trim(), totalRow[2].textContent.trim()]);
         }
-
     } else {
         filename = "malawi_national_water_points.csv";
-
         rows.push(["District", "Total", "Functional", "Partial", "Not Functional", "Abandoned", "% Functional"]);
-
         const tableRows = document.querySelectorAll("#nationalTableContainer tbody tr");
         tableRows.forEach(row => {
             const cells = row.querySelectorAll("td");
-            rows.push([
-                cells[0].textContent.trim(),
-                cells[1].textContent.trim(),
-                cells[2].textContent.trim(),
-                cells[3].textContent.trim(),
-                cells[4].textContent.trim(),
-                cells[5].textContent.trim(),
-                cells[6].textContent.trim()
-            ]);
+            rows.push([cells[0].textContent.trim(), cells[1].textContent.trim(), cells[2].textContent.trim(), cells[3].textContent.trim(), cells[4].textContent.trim(), cells[5].textContent.trim(), cells[6].textContent.trim()]);
         });
-
         const totalRow = document.querySelectorAll("#nationalTableContainer tfoot td");
         if (totalRow.length) {
-            rows.push([
-                totalRow[0].textContent.trim(),
-                totalRow[1].textContent.trim(),
-                totalRow[2].textContent.trim(),
-                totalRow[3].textContent.trim(),
-                totalRow[4].textContent.trim(),
-                totalRow[5].textContent.trim(),
-                totalRow[6].textContent.trim()
-            ]);
+            rows.push([totalRow[0].textContent.trim(), totalRow[1].textContent.trim(), totalRow[2].textContent.trim(), totalRow[3].textContent.trim(), totalRow[4].textContent.trim(), totalRow[5].textContent.trim(), totalRow[6].textContent.trim()]);
         }
     }
 
-    const csvContent = rows.map(row =>
-        row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(",")
-    ).join("\n");
-
+    const csvContent = rows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -583,9 +485,183 @@ function exportCSV(type) {
     URL.revokeObjectURL(url);
 }
 
+// ============ AUTHENTICATION & DATA ENTRY ============
+
+function showOfficerLogin() {
+    document.getElementById('officerLoginModal').style.display = 'flex';
+}
+
+function closeOfficerLogin() {
+    document.getElementById('officerLoginModal').style.display = 'none';
+}
+
+function openDataEntryModal() {
+    if (!currentOfficer) {
+        showOfficerLogin();
+        return;
+    }
+    document.getElementById('dataEntryModal').style.display = 'flex';
+    document.getElementById('dataEntryForm').reset();
+    document.getElementById('entryMessage').innerHTML = '';
+    
+    if (currentOfficer.district) {
+        const districtSelect = document.getElementById('entryDistrict');
+        districtSelect.value = currentOfficer.district;
+        districtSelect.disabled = true;
+    } else {
+        document.getElementById('entryDistrict').disabled = false;
+    }
+}
+
+function closeDataEntryModal() {
+    document.getElementById('dataEntryModal').style.display = 'none';
+}
+
+function showToast(msg, type) {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = msg;
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 100px;
+        right: 30px;
+        background: ${type === 'success' ? '#2a5a3a' : '#dc2626'};
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        z-index: 2000;
+        animation: fadeInOut 3s ease;
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function showMessage(msg, type) {
+    const msgDiv = document.getElementById('entryMessage');
+    msgDiv.innerHTML = `<div class="message ${type}" style="padding:10px; border-radius:6px; background:${type === 'success' ? '#d1fae5' : '#fee2e2'}; color:${type === 'success' ? '#065f46' : '#991b1b'}">${msg}</div>`;
+    setTimeout(() => { msgDiv.innerHTML = ''; }, 3000);
+}
+
+function updateOfficerBar() {
+    if (currentOfficer) {
+        document.getElementById('officerBar').style.display = 'block';
+        document.getElementById('officerName').textContent = currentOfficer.full_name || currentOfficer.username;
+        document.getElementById('officerDistrict').textContent = currentOfficer.district ? `District: ${currentOfficer.district}` : 'National Officer';
+        document.getElementById('dataEntryButton').style.display = 'block';
+    } else {
+        document.getElementById('officerBar').style.display = 'none';
+        document.getElementById('dataEntryButton').style.display = 'none';
+    }
+}
+
+function logout() {
+    fetch(`${API_URL}/api/logout`, {
+        method: 'POST',
+        credentials: 'include'
+    })
+    .then(() => {
+        currentOfficer = null;
+        updateOfficerBar();
+        showToast('Logged out successfully', 'info');
+    });
+}
+
+// Check officer session on page load
+function checkOfficerSession() {
+    fetch(`${API_URL}/api/me`, { credentials: 'include' })
+        .then(res => {
+            if (res.status === 401) return null;
+            return res.json();
+        })
+        .then(user => {
+            if (user) {
+                currentOfficer = user;
+                updateOfficerBar();
+            }
+        })
+        .catch(() => {});
+}
+
+// Login form handler
+document.getElementById('officerLoginForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const username = document.getElementById('officerUsername').value;
+    const password = document.getElementById('officerPassword').value;
+    
+    fetch(`${API_URL}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+        credentials: 'include'
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            currentOfficer = data.user;
+            closeOfficerLogin();
+            updateOfficerBar();
+            showToast(`Welcome, ${currentOfficer.full_name || currentOfficer.username}!`, 'success');
+        } else {
+            document.getElementById('officerLoginError').textContent = data.error;
+        }
+    })
+    .catch(() => {
+        document.getElementById('officerLoginError').textContent = 'Login failed. Try again.';
+    });
+});
+
+// Submit new water point
+document.getElementById('dataEntryForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    
+    const data = {
+        district: document.getElementById('entryDistrict').value,
+        name: document.getElementById('entryName').value,
+        ta: document.getElementById('entryTA').value,
+        type: document.getElementById('entryType').value,
+        status: document.getElementById('entryStatus').value,
+        latitude: document.getElementById('entryLat').value || null,
+        longitude: document.getElementById('entryLng').value || null,
+        officer_name: document.getElementById('entryOfficer').value || currentOfficer?.username,
+        notes: document.getElementById('entryNotes').value
+    };
+    
+    if (!data.district || !data.name || !data.ta || !data.type || !data.status) {
+        showMessage('Please fill all required fields', 'error');
+        return;
+    }
+    
+    fetch(`${API_URL}/api/add-water-point`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+        credentials: 'include'
+    })
+    .then(res => res.json())
+    .then(result => {
+        if (result.success) {
+            showMessage('Water point added successfully!', 'success');
+            setTimeout(() => {
+                closeDataEntryModal();
+                const currentTable = document.getElementById('tableSelect')?.value;
+                if (currentTable === data.district) {
+                    fetchData(currentTable);
+                    loadMap(currentTable);
+                }
+            }, 1500);
+        } else {
+            showMessage(result.error || 'Error adding water point', 'error');
+        }
+    })
+    .catch(err => {
+        showMessage('Network error. Please try again.', 'error');
+    });
+});
+
 // Initialize everything
 const initialTable = document.getElementById("tableSelect").value;
 initMap();
+checkOfficerSession();
 loadDistricts(initialTable);
 loadTypes(initialTable);
 fetchData(initialTable);
