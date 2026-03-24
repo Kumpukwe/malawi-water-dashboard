@@ -33,6 +33,7 @@
             border-radius: 12px;
             margin-bottom: 25px;
             text-align: center;
+            position: relative;
         }
 
         header img {
@@ -48,6 +49,49 @@
         header p {
             opacity: 0.9;
             font-size: 1rem;
+        }
+
+        /* Officer Bar */
+        .officer-bar {
+            background: #2a5a3a;
+            color: white;
+            padding: 10px 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .officer-info {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .district-badge {
+            background: #ffc107;
+            color: #1e3c2c;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+
+        .logout-small {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 5px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .logout-small:hover {
+            background: #b91c1c;
         }
 
         .tabs {
@@ -227,6 +271,117 @@
             margin-top: 30px;
         }
 
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+        }
+
+        .large-modal {
+            max-width: 800px;
+        }
+
+        .modal-content h2 {
+            margin-bottom: 20px;
+            color: #1e3c2c;
+        }
+
+        .modal-content input,
+        .modal-content select,
+        .modal-content textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+        }
+
+        .modal-content button {
+            background: #2a5a3a;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        .modal-content button:hover {
+            background: #1e3c2c;
+        }
+
+        .close-modal {
+            background: #6b7280;
+            float: right;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .error-message {
+            color: #dc2626;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .floating-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #2a5a3a;
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+            transition: transform 0.2s;
+        }
+
+        .floating-btn:hover {
+            transform: scale(1.05);
+            background: #1e3c2c;
+        }
+
         @media (max-width: 768px) {
             .stats-grid {
                 grid-template-columns: repeat(2, 1fr);
@@ -253,12 +408,19 @@
 <body>
     <div class="container">
         <header>
-            <header>
-    <img src="/baseflow-logo.png.jpg" alt="Baseflow" style="height: 80px; margin-bottom: 15px;">
-    <h1>💧 Malawi Water Points Dashboard</h1>
-    <p>Monitoring Water Point Functionality Across All Districts</p>
-</header>
+            <img src="/baseflow-logo.png.jpg" alt="Baseflow">
+            <h1>💧 Malawi Water Points Dashboard</h1>
+            <p>Monitoring Water Point Functionality Across All Districts</p>
         </header>
+
+        <!-- Officer Bar (hidden by default) -->
+        <div id="officerBar" style="display: none;" class="officer-bar">
+            <div class="officer-info">
+                <span>👤 Logged in as: <strong id="officerName"></strong></span>
+                <span class="district-badge" id="officerDistrict"></span>
+            </div>
+            <button onclick="logout()" class="logout-small">Logout</button>
+        </div>
 
         <div class="tabs">
             <button class="tab active" onclick="switchTab('district')">🏘️ District View</button>
@@ -392,6 +554,124 @@
             <button class="export-btn" onclick="exportCSV('national')" style="margin-left: 10px;">📥 Export National Data (CSV)</button>
             <p style="margin-top: 20px;">Data Source: Malawi Water Points Database | Powered by Baseflow</p>
         </footer>
+    </div>
+
+    <!-- Officer Login Modal -->
+    <div id="officerLoginModal" class="modal">
+        <div class="modal-content">
+            <h2>🔐 Officer Login</h2>
+            <p>Login to add or update water point data</p>
+            <form id="officerLoginForm">
+                <input type="text" id="officerUsername" placeholder="Username or Email" required>
+                <input type="password" id="officerPassword" placeholder="Password" required>
+                <button type="submit">Login</button>
+                <button type="button" onclick="closeOfficerLogin()">Cancel</button>
+                <div id="officerLoginError" class="error-message"></div>
+            </form>
+            <div style="margin-top: 15px; font-size: 12px; color: #6b7280; text-align: center;">
+                <p>Default: admin / admin123</p>
+                <p>Contact administrator for credentials</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Entry Button -->
+    <div id="dataEntryButton" style="display: none;">
+        <button class="floating-btn" onclick="openDataEntryModal()">
+            📝 + Add Water Point
+        </button>
+    </div>
+
+    <!-- Data Entry Modal -->
+    <div id="dataEntryModal" class="modal">
+        <div class="modal-content large-modal">
+            <h2>📝 Add New Water Point</h2>
+            <form id="dataEntryForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>District *</label>
+                        <select id="entryDistrict" required>
+                            <option value="">Select District</option>
+                            <option value="nsanje">Nsanje</option>
+                            <option value="chikwawa">Chikwawa</option>
+                            <option value="blantyre">Blantyre</option>
+                            <option value="chiradzulo">Chiradzulo</option>
+                            <option value="thyolo">Thyolo</option>
+                            <option value="mulanje">Mulanje</option>
+                            <option value="phalombe">Phalombe</option>
+                            <option value="zomba">Zomba</option>
+                            <option value="machinga">Machinga</option>
+                            <option value="mangochi">Mangochi</option>
+                            <option value="balaka">Balaka</option>
+                            <option value="ntcheu">Ntcheu</option>
+                            <option value="dedza">Dedza</option>
+                            <option value="salima">Salima</option>
+                            <option value="lilongwe">Lilongwe</option>
+                            <option value="mchinji">Mchinji</option>
+                            <option value="dowa">Dowa</option>
+                            <option value="ntchisi">Ntchisi</option>
+                            <option value="kasungu">Kasungu</option>
+                            <option value="nkhotakota">Nkhotakota</option>
+                            <option value="nkhatabay">Nkhatabay</option>
+                            <option value="mzimba">Mzimba</option>
+                            <option value="karonga">Karonga</option>
+                            <option value="chitipa">Chitipa</option>
+                            <option value="likoma">Likoma</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Water Point Name *</label>
+                        <input type="text" id="entryName" placeholder="e.g., Borehole near school" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Traditional Authority *</label>
+                        <input type="text" id="entryTA" placeholder="TA name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Water Point Type *</label>
+                        <select id="entryType" required>
+                            <option value="Borehole">Borehole</option>
+                            <option value="Well">Well</option>
+                            <option value="Tap Stand">Tap Stand</option>
+                            <option value="Protected Spring">Protected Spring</option>
+                            <option value="Unprotected Spring">Unprotected Spring</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Functionality Status *</label>
+                        <select id="entryStatus" required>
+                            <option value="Functional">Functional ✅</option>
+                            <option value="Partially functional but in need of repair">Partially Functional ⚠️</option>
+                            <option value="Not functional">Not Functional ❌</option>
+                            <option value="No longer exists or abandoned">Abandoned 🏚️</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Latitude</label>
+                        <input type="number" step="any" id="entryLat" placeholder="e.g., -13.9833">
+                        <small>Click on map to auto-fill</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Longitude</label>
+                        <input type="number" step="any" id="entryLng" placeholder="e.g., 33.7833">
+                        <small>Click on map to auto-fill</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Your Name</label>
+                        <input type="text" id="entryOfficer" placeholder="Field officer name">
+                    </div>
+                    <div class="form-group">
+                        <label>Notes</label>
+                        <textarea id="entryNotes" rows="3" placeholder="Additional observations..."></textarea>
+                    </div>
+                </div>
+                <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                    <button type="submit">✓ Submit Water Point</button>
+                    <button type="button" onclick="closeDataEntryModal()">Cancel</button>
+                </div>
+                <div id="entryMessage" class="message"></div>
+            </form>
+        </div>
     </div>
 
     <script src="script.js"></script>
