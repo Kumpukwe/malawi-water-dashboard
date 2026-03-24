@@ -75,8 +75,6 @@ function loadNational() {
     fetch(`${API_URL}/national`)
         .then(res => res.json())
         .then(data => {
-            console.log("National data received:", data.length, "districts");
-            
             const districts = data.map(d => d.district.charAt(0).toUpperCase() + d.district.slice(1));
             const totals = data.map(d => Number(d.total));
             const functional = data.map(d => Number(d.functional));
@@ -84,7 +82,6 @@ function loadNational() {
             const notFunctional = data.map(d => Number(d.not_functional));
             const abandoned = data.map(d => Number(d.abandoned));
 
-            // National cards
             const grandTotal = totals.reduce((a, b) => a + b, 0);
             const grandFunctional = functional.reduce((a, b) => a + b, 0);
             const grandPartial = partial.reduce((a, b) => a + b, 0);
@@ -103,7 +100,6 @@ function loadNational() {
             document.getElementById("natCardAbandoned").textContent = grandAbandoned.toLocaleString();
             document.getElementById("natCardAbandonedPct").textContent = pct(grandAbandoned);
 
-            // National chart
             if (nationalChart) nationalChart.destroy();
             nationalChart = new Chart(nationalCtx, {
                 type: "bar",
@@ -126,7 +122,6 @@ function loadNational() {
                 }
             });
 
-            // National table
             const tableDiv = document.getElementById("nationalTableContainer");
             tableDiv.innerHTML = `
                 <h2>District Summary Table</h2>
@@ -183,7 +178,6 @@ function initMap() {
         markersLayer = L.layerGroup().addTo(map);
         console.log("Map initialized successfully");
         
-        // Add click listener for coordinates
         map.on('click', function(e) {
             const modal = document.getElementById('dataEntryModal');
             if (modal && modal.style.display === 'flex') {
@@ -547,16 +541,12 @@ function updateOfficerBar() {
         document.getElementById('officerBar').style.display = 'block';
         document.getElementById('officerName').textContent = currentOfficer.full_name || currentOfficer.username;
         
-        // Set the district badge text
         const districtBadge = document.getElementById('officerDistrict');
         if (currentOfficer.district) {
-            // If officer has a specific district
-            districtBadge.textContent = `District: ${currentOfficer.district.toUpperCase()} Water Officer`;
+            districtBadge.textContent = `${currentOfficer.district.toUpperCase()} District Water Officer`;
         } else if (currentOfficer.role === 'admin') {
-            // For admin
             districtBadge.textContent = 'System Administrator';
         } else {
-            // For national officers
             districtBadge.textContent = 'District Water Officer';
         }
         
@@ -565,7 +555,6 @@ function updateOfficerBar() {
         document.getElementById('officerBar').style.display = 'none';
         document.getElementById('dataEntryButton').style.display = 'none';
     }
-}
 }
 
 function logout() {
@@ -580,7 +569,6 @@ function logout() {
     });
 }
 
-// Check officer session on page load
 function checkOfficerSession() {
     fetch(`${API_URL}/api/me`, { credentials: 'include' })
         .then(res => {
@@ -596,7 +584,6 @@ function checkOfficerSession() {
         .catch(() => {});
 }
 
-// Login form handler
 document.getElementById('officerLoginForm')?.addEventListener('submit', (e) => {
     e.preventDefault();
     const username = document.getElementById('officerUsername').value;
@@ -614,7 +601,16 @@ document.getElementById('officerLoginForm')?.addEventListener('submit', (e) => {
             currentOfficer = data.user;
             closeOfficerLogin();
             updateOfficerBar();
-            showToast(`Welcome, ${currentOfficer.full_name || currentOfficer.username}!`, 'success');
+            
+            let welcomeMsg = '';
+            if (currentOfficer.district) {
+                welcomeMsg = `Welcome, ${currentOfficer.full_name || currentOfficer.username}! You are logged in as ${currentOfficer.district.toUpperCase()} District Water Officer.`;
+            } else if (currentOfficer.role === 'admin') {
+                welcomeMsg = `Welcome, ${currentOfficer.full_name || currentOfficer.username}! You are logged in as System Administrator.`;
+            } else {
+                welcomeMsg = `Welcome, ${currentOfficer.full_name || currentOfficer.username}! You are logged in as District Water Officer.`;
+            }
+            showToast(welcomeMsg, 'success');
         } else {
             document.getElementById('officerLoginError').textContent = data.error;
         }
@@ -624,7 +620,6 @@ document.getElementById('officerLoginForm')?.addEventListener('submit', (e) => {
     });
 });
 
-// Submit new water point
 document.getElementById('dataEntryForm')?.addEventListener('submit', (e) => {
     e.preventDefault();
     
