@@ -1,17 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <header>
-    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px;">
-        <div style="display: flex; align-items: center; gap: 15px;">
-            <img src="/baseflow-logo.png" alt="Baseflow Logo" style="height: 50px;">
-            <div>
-                <h1>💧 Malawi Water Points Dashboard</h1>
-                <p>Monitoring Water Point Functionality Across All Districts</p>
-            </div>
-        </div>
-    </div>
-</header>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Malawi Water Points Dashboard</title>
@@ -40,10 +29,15 @@
         header {
             background: linear-gradient(135deg, #1e3c2c, #2a5a3a);
             color: white;
-            padding: 20px;
+            padding: 30px 20px;
             border-radius: 12px;
             margin-bottom: 25px;
             text-align: center;
+        }
+
+        header img {
+            height: 80px;
+            margin-bottom: 15px;
         }
 
         header h1 {
@@ -245,12 +239,21 @@
             .filters select {
                 width: 100%;
             }
+            
+            header img {
+                height: 60px;
+            }
+            
+            header h1 {
+                font-size: 1.5rem;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
+            <img src="/baseflow-logo.png" alt="Baseflow">
             <h1>💧 Malawi Water Points Dashboard</h1>
             <p>Monitoring Water Point Functionality Across All Districts</p>
         </header>
@@ -385,7 +388,7 @@
         <footer>
             <button class="export-btn" onclick="exportCSV('district')">📥 Export District Data (CSV)</button>
             <button class="export-btn" onclick="exportCSV('national')" style="margin-left: 10px;">📥 Export National Data (CSV)</button>
-            <p style="margin-top: 20px;">Data Source: Malawi Water Points Database | Updated: 2026</p>
+            <p style="margin-top: 20px;">Data Source: Malawi Water Points Database | Powered by Baseflow</p>
         </footer>
     </div>
 
