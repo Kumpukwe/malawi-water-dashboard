@@ -75,6 +75,8 @@ function loadNational() {
     fetch(`${API_URL}/national`)
         .then(res => res.json())
         .then(data => {
+            console.log("National data received:", data.length, "districts");
+            
             const districts = data.map(d => d.district.charAt(0).toUpperCase() + d.district.slice(1));
             const totals = data.map(d => Number(d.total));
             const functional = data.map(d => Number(d.functional));
@@ -82,6 +84,7 @@ function loadNational() {
             const notFunctional = data.map(d => Number(d.not_functional));
             const abandoned = data.map(d => Number(d.abandoned));
 
+            // National cards
             const grandTotal = totals.reduce((a, b) => a + b, 0);
             const grandFunctional = functional.reduce((a, b) => a + b, 0);
             const grandPartial = partial.reduce((a, b) => a + b, 0);
@@ -100,6 +103,7 @@ function loadNational() {
             document.getElementById("natCardAbandoned").textContent = grandAbandoned.toLocaleString();
             document.getElementById("natCardAbandonedPct").textContent = pct(grandAbandoned);
 
+            // National chart
             if (nationalChart) nationalChart.destroy();
             nationalChart = new Chart(nationalCtx, {
                 type: "bar",
@@ -122,6 +126,7 @@ function loadNational() {
                 }
             });
 
+            // National table
             const tableDiv = document.getElementById("nationalTableContainer");
             tableDiv.innerHTML = `
                 <h2>District Summary Table</h2>
@@ -255,6 +260,7 @@ function loadMap(table = "nsanje", TA = "", type = "") {
 
                 marker.bindPopup(`
                     <strong>${p.Name || "Unknown"}</strong><br>
+                    <b>ID:</b> ${p.water_point_id || 'N/A'}<br>
                     <b>Type:</b> ${p.Type || "N/A"}<br>
                     <b>Status:</b> <span style="color:${color}">${p.status || "N/A"}</span>
                 `);
@@ -649,7 +655,7 @@ document.getElementById('dataEntryForm')?.addEventListener('submit', (e) => {
     .then(res => res.json())
     .then(result => {
         if (result.success) {
-            showMessage('Water point added successfully!', 'success');
+            showMessage('Water point added successfully! ID: ' + result.water_point_id, 'success');
             setTimeout(() => {
                 closeDataEntryModal();
                 const currentTable = document.getElementById('tableSelect')?.value;
