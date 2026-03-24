@@ -546,12 +546,26 @@ function updateOfficerBar() {
     if (currentOfficer) {
         document.getElementById('officerBar').style.display = 'block';
         document.getElementById('officerName').textContent = currentOfficer.full_name || currentOfficer.username;
-        document.getElementById('officerDistrict').textContent = currentOfficer.district ? `District: ${currentOfficer.district}` : 'National Officer';
+        
+        // Set the district badge text
+        const districtBadge = document.getElementById('officerDistrict');
+        if (currentOfficer.district) {
+            // If officer has a specific district
+            districtBadge.textContent = `District: ${currentOfficer.district.toUpperCase()} Water Officer`;
+        } else if (currentOfficer.role === 'admin') {
+            // For admin
+            districtBadge.textContent = 'System Administrator';
+        } else {
+            // For national officers
+            districtBadge.textContent = 'District Water Officer';
+        }
+        
         document.getElementById('dataEntryButton').style.display = 'block';
     } else {
         document.getElementById('officerBar').style.display = 'none';
         document.getElementById('dataEntryButton').style.display = 'none';
     }
+}
 }
 
 function logout() {
