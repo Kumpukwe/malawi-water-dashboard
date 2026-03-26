@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MW Water">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Malawi Water Points Dashboard</title>
@@ -397,6 +401,230 @@
                 font-size: 1.5rem;
             }
         }
+                /* ============ MOBILE OPTIMIZATIONS ============ */
+        
+        /* Touch-friendly buttons */
+        button, .tab, select, .export-btn, .floating-btn, .logout-small {
+            min-height: 44px;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* Better touch scrolling */
+        .map-container, .table-container {
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        /* Improve mobile layout */
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+            }
+            
+            .stat-card {
+                padding: 15px 10px;
+            }
+            
+            .stat-card .number {
+                font-size: 1.6rem;
+            }
+            
+            .stat-card h3 {
+                font-size: 0.75rem;
+            }
+            
+            .filters {
+                flex-direction: column;
+                gap: 10px;
+                padding: 15px;
+            }
+            
+            .filters select {
+                width: 100%;
+                padding: 12px;
+                font-size: 1rem;
+            }
+            
+            .tabs {
+                gap: 8px;
+            }
+            
+            .tab {
+                padding: 10px 12px;
+                font-size: 0.85rem;
+            }
+            
+            .chart-container {
+                padding: 12px;
+            }
+            
+            .chart-container canvas {
+                max-height: 250px;
+            }
+            
+            #map {
+                height: 350px;
+            }
+            
+            header {
+                padding: 20px 15px;
+            }
+            
+            header img {
+                height: 50px;
+                margin-bottom: 10px;
+            }
+            
+            header h1 {
+                font-size: 1.3rem;
+            }
+            
+            header p {
+                font-size: 0.8rem;
+            }
+            
+            .officer-bar {
+                flex-direction: column;
+                text-align: center;
+                padding: 12px;
+            }
+            
+            .officer-info {
+                justify-content: center;
+                margin-bottom: 8px;
+            }
+            
+            .export-btn {
+                width: 100%;
+                margin: 5px 0;
+                padding: 12px;
+            }
+            
+            footer {
+                padding: 15px;
+            }
+            
+            footer .export-btn {
+                display: block;
+                width: 100%;
+                margin: 8px 0;
+            }
+            
+            .floating-btn {
+                padding: 12px 20px;
+                font-size: 0.9rem;
+                bottom: 15px;
+                right: 15px;
+            }
+            
+            .modal-content {
+                width: 95%;
+                padding: 20px;
+                margin: 10px;
+                max-height: 90vh;
+                overflow-y: auto;
+            }
+            
+            .large-modal {
+                max-width: 95%;
+            }
+            
+            .form-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+            
+            .form-group input,
+            .form-group select,
+            .form-group textarea {
+                padding: 12px;
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
+            
+            table {
+                font-size: 0.8rem;
+            }
+            
+            th, td {
+                padding: 8px 6px;
+            }
+            
+            .table-container {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+        }
+        
+        /* Extra small phones */
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+            
+            .stat-card .number {
+                font-size: 1.3rem;
+            }
+            
+            .tab {
+                font-size: 0.75rem;
+                padding: 8px 6px;
+            }
+            
+            header h1 {
+                font-size: 1.1rem;
+            }
+            
+            .district-badge {
+                font-size: 0.7rem;
+            }
+            
+            .officer-info span {
+                font-size: 0.8rem;
+            }
+        }
+        
+        /* Landscape mode optimization */
+        @media (max-width: 900px) and (orientation: landscape) {
+            #map {
+                height: 250px;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        
+        /* Disable hover effects on touch devices */
+        @media (hover: none) {
+            .stat-card:hover {
+                transform: none;
+            }
+            
+            .floating-btn:hover {
+                transform: none;
+            }
+        }
+        
+        /* Improve tap targets */
+        button, .tab, select, .export-btn, .floating-btn, .logout-small, .close-modal {
+            cursor: pointer;
+        }
+        
+        /* Prevent text selection on buttons */
+        button, .tab, .export-btn {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        /* Smooth scrolling for the whole page */
+        html {
+            scroll-behavior: smooth;
+        }
     </style>
 </head>
 <body>
@@ -407,6 +635,12 @@
             <p>Monitoring Water Point Functionality Across All Districts</p>
         </header>
 
+        <!-- Login Button (visible when not logged in) -->
+<div id="loginButton" style="text-align: right; margin-bottom: 10px;">
+    <button onclick="showOfficerLogin()" style="background: #2a5a3a; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+        🔐 Officer Login
+    </button>
+</div>
         <!-- Officer Bar (hidden by default) -->
         <div id="officerBar" style="display: none;" class="officer-bar">
             <div class="officer-info">
