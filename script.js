@@ -567,6 +567,21 @@ function updateOfficerBar() {
     }
 }
 
+function checkOfficerSession() {
+    fetch(`${API_URL}/api/me`, { credentials: 'include' })
+        .then(res => {
+            if (res.status === 401) return null;
+            return res.json();
+        })
+        .then(user => {
+            if (user) {
+                currentOfficer = user;
+                updateOfficerBar();
+            }
+        })
+        .catch(() => {});
+}
+
 function logout() {
     fetch(`${API_URL}/api/logout`, {
         method: 'POST',
