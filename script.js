@@ -543,7 +543,6 @@ function showMessage(msg, type) {
 }
 
 function updateOfficerBar() {
- function updateOfficerBar() {
     if (currentOfficer) {
         document.getElementById('officerBar').style.display = 'block';
         
@@ -592,21 +591,6 @@ function logout() {
         updateOfficerBar();
         showToast('Logged out successfully', 'info');
     });
-}
-
-function checkOfficerSession() {
-    fetch(`${API_URL}/api/me`, { credentials: 'include' })
-        .then(res => {
-            if (res.status === 401) return null;
-            return res.json();
-        })
-        .then(user => {
-            if (user) {
-                currentOfficer = user;
-                updateOfficerBar();
-            }
-        })
-        .catch(() => {});
 }
 
 document.getElementById('officerLoginForm')?.addEventListener('submit', (e) => {
@@ -692,10 +676,11 @@ document.getElementById('dataEntryForm')?.addEventListener('submit', (e) => {
     });
 });
 
-//if ('serviceWorker' in navigator) {
-    //navigator.serviceWorker.register('/sw.js')
-       // .then(reg => console.log('Service Worker registered'))
-        //.catch(err => console.log('Service Worker failed:', err));
+// Service Worker Registration
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('Service Worker registered'))
+        .catch(err => console.log('Service Worker failed:', err));
 }
 
 // Initialize everything

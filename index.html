@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
     <link rel="manifest" href="/manifest.json">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="MW Water">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="MW Water">
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Malawi Water Points Dashboard</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -95,6 +95,20 @@
 
         .logout-small:hover {
             background: #b91c1c;
+        }
+
+        .login-btn {
+            background: #2a5a3a;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .login-btn:hover {
+            background: #1e3c2c;
         }
 
         .tabs {
@@ -294,6 +308,8 @@
             border-radius: 12px;
             width: 90%;
             max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
         }
 
         .large-modal {
@@ -380,6 +396,11 @@
             background: #1e3c2c;
         }
 
+        /* Hide elements */
+        .hidden {
+            display: none !important;
+        }
+
         @media (max-width: 768px) {
             .stats-grid {
                 grid-template-columns: repeat(2, 1fr);
@@ -401,10 +422,11 @@
                 font-size: 1.5rem;
             }
         }
-                /* ============ MOBILE OPTIMIZATIONS ============ */
+        
+        /* ============ MOBILE OPTIMIZATIONS ============ */
         
         /* Touch-friendly buttons */
-        button, .tab, select, .export-btn, .floating-btn, .logout-small {
+        button, .tab, select, .export-btn, .floating-btn, .logout-small, .login-btn {
             min-height: 44px;
             -webkit-tap-highlight-color: transparent;
         }
@@ -611,12 +633,12 @@
         }
         
         /* Improve tap targets */
-        button, .tab, select, .export-btn, .floating-btn, .logout-small, .close-modal {
+        button, .tab, select, .export-btn, .floating-btn, .logout-small, .login-btn, .close-modal {
             cursor: pointer;
         }
         
         /* Prevent text selection on buttons */
-        button, .tab, .export-btn {
+        button, .tab, .export-btn, .login-btn {
             user-select: none;
             -webkit-user-select: none;
         }
@@ -636,20 +658,20 @@
         </header>
 
         <!-- Login Button (visible when not logged in) -->
-<div id="loginButton" style="text-align: right; margin-bottom: 10px;">
-    <button onclick="showOfficerLogin()" style="background: #2a5a3a; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
-        🔐 Officer Login
-    </button>
-</div>
+        <div id="loginButton" style="text-align: right; margin-bottom: 10px;">
+            <button onclick="showOfficerLogin()" class="login-btn">
+                🔐 Officer Login
+            </button>
+        </div>
+        
         <!-- Officer Bar (hidden by default) -->
-        <!-- Officer Bar (hidden by default) -->
-<div id="officerBar" style="display: none;" class="officer-bar">
-    <div class="officer-info">
-        <span>👤 <strong id="officerName"></strong></span>
-        <span class="district-badge" id="officerDistrict"></span>
-    </div>
-    <button onclick="logout()" class="logout-small">Logout</button>
-</div>
+        <div id="officerBar" style="display: none;" class="officer-bar">
+            <div class="officer-info">
+                <span>👤 <strong id="officerName"></strong></span>
+                <span class="district-badge" id="officerDistrict"></span>
+            </div>
+            <button onclick="logout()" class="logout-small">Logout</button>
+        </div>
 
         <div class="tabs">
             <button class="tab active" onclick="switchTab('district')">🏘️ District View</button>
@@ -904,5 +926,35 @@
     </div>
 
     <script src="script.js"></script>
+    <script>
+        // Fix for Leaflet map on mobile - ensure map resizes correctly
+        window.addEventListener('resize', function() {
+            if (map) {
+                setTimeout(function() {
+                    map.invalidateSize();
+                }, 200);
+            }
+        });
+        
+        // Also invalidate map size when switching tabs
+        const originalSwitchTab = switchTab;
+        window.switchTab = function(tab) {
+            originalSwitchTab(tab);
+            setTimeout(function() {
+                if (map) {
+                    map.invalidateSize();
+                }
+            }, 100);
+        };
+        
+        // Handle orientation change
+        window.addEventListener('orientationchange', function() {
+            setTimeout(function() {
+                if (map) {
+                    map.invalidateSize();
+                }
+            }, 200);
+        });
+    </script>
 </body>
 </html>
