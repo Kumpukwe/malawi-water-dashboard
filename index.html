@@ -642,13 +642,14 @@
     </button>
 </div>
         <!-- Officer Bar (hidden by default) -->
-        <div id="officerBar" style="display: none;" class="officer-bar">
-            <div class="officer-info">
-                <span>👤 Logged in as: <strong id="officerName"></strong></span>
-                <span class="district-badge" id="officerDistrict">District Water Officer</span>
-            </div>
-            <button onclick="logout()" class="logout-small">Logout</button>
-        </div>
+        <!-- Officer Bar (hidden by default) -->
+<div id="officerBar" style="display: none;" class="officer-bar">
+    <div class="officer-info">
+        <span>👤 <strong id="officerName"></strong></span>
+        <span class="district-badge" id="officerDistrict"></span>
+    </div>
+    <button onclick="logout()" class="logout-small">Logout</button>
+</div>
 
         <div class="tabs">
             <button class="tab active" onclick="switchTab('district')">🏘️ District View</button>

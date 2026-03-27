@@ -543,10 +543,14 @@ function showMessage(msg, type) {
 }
 
 function updateOfficerBar() {
+ function updateOfficerBar() {
     if (currentOfficer) {
         document.getElementById('officerBar').style.display = 'block';
+        
+        // Set name
         document.getElementById('officerName').textContent = currentOfficer.full_name || currentOfficer.username;
         
+        // Set badge
         const districtBadge = document.getElementById('officerDistrict');
         if (currentOfficer.district) {
             districtBadge.textContent = `${currentOfficer.district.toUpperCase()} District Water Officer`;
@@ -672,6 +676,12 @@ document.getElementById('dataEntryForm')?.addEventListener('submit', (e) => {
         showMessage('Network error. Please try again.', 'error');
     });
 });
+
+//if ('serviceWorker' in navigator) {
+    //navigator.serviceWorker.register('/sw.js')
+       // .then(reg => console.log('Service Worker registered'))
+        //.catch(err => console.log('Service Worker failed:', err));
+}
 
 // Initialize everything
 const initialTable = document.getElementById("tableSelect").value;
