@@ -278,28 +278,40 @@ function loadMap(table = "nsanje", TA = "", type = "") {
 
 function renderCards(data) {
     const total = data.reduce((sum, d) => sum + Number(d.total), 0);
-
-    const get = (keyword) => {
-        const row = data.find(d => d.status && d.status.toLowerCase().includes(keyword));
-        return row ? Number(row.total) : 0;
-    };
-
-    const functional = get("functional") - get("partially") - get("not functional");
-    const partial = get("partially");
-    const notFunctional = get("not functional");
-    const abandoned = get("abandoned");
-
+    
+    // Direct status matching (no keyword searching)
+    let functional = 0;
+    let partial = 0;
+    let notFunctional = 0;
+    let abandoned = 0;
+    
+    data.forEach(item => {
+        const status = item.status;
+        const count = Number(item.total);
+        
+        if (status === "Functional") {
+            functional += count;
+        } else if (status === "Partially functional but in need of repair") {
+            partial += count;
+        } else if (status === "Not functional") {
+            notFunctional += count;
+        } else if (status === "No longer exists or abandoned") {
+            abandoned += count;
+        }
+    });
+    
     const pct = (val) => total > 0 ? ((val / total) * 100).toFixed(1) + "%" : "0%";
-
+    
     document.getElementById("cardTotal").textContent = total.toLocaleString();
     document.getElementById("cardFunctional").textContent = functional.toLocaleString();
-    document.getElementById("cardFunctionalPct").textContent = pct(functional) + " of total";
+    document.getElementById("cardFunctionalPct").textContent = pct(functional);
     document.getElementById("cardPartial").textContent = partial.toLocaleString();
-    document.getElementById("cardPartialPct").textContent = pct(partial) + " of total";
+    document.getElementById("cardPartialPct").textContent = pct(partial);
     document.getElementById("cardNotFunctional").textContent = notFunctional.toLocaleString();
-    document.getElementById("cardNotFunctionalPct").textContent = pct(notFunctional) + " of total";
+    document.getElementById("cardNotFunctionalPct").textContent = pct(notFunctional);
     document.getElementById("cardAbandoned").textContent = abandoned.toLocaleString();
-    document.getElementById("cardAbandonedPct").textContent = pct(abandoned) + " of total";
+    document.getElementById("cardAbandonedPct").textContent = pct(abandoned);
+}
 }
 
 function loadDistricts(table) {
