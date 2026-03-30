@@ -312,7 +312,6 @@ function renderCards(data) {
     document.getElementById("cardAbandoned").textContent = abandoned.toLocaleString();
     document.getElementById("cardAbandonedPct").textContent = pct(abandoned);
 }
-
 function loadDistricts(table) {
     fetch(`${API_URL}/districts?table=${encodeURIComponent(table)}`)
         .then(res => res.json())

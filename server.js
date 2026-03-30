@@ -428,93 +428,151 @@ app.post('/api/add-water-point', authenticateToken, (req, res) => {
 app.get('/data', (req, res) => {
     const { table, district, type } = req.query;
     
+    console.log('Data request:', { table, district, type }); // Debug log
+    
+    // First, check if the table exists
     let query = `
         SELECT status, COUNT(*) as total 
         FROM water_points 
-        WHERE district = ? 
+        WHERE LOWER(district) = LOWER(?)
     `;
     const params = [table];
     
     if (district && district !== '') {
-        query += ` AND ta = ?`;
-        params.push(district);
+        query += ` AND (ta = ? OR traditional_authority = ?)`;
+        params.push(district, district);
     }
     
     if (type && type !== '') {
-        query += ` AND type = ?`;
-        params.push(type);
+        query += ` AND (type = ? OR water_point_type = ?)`;
+        params.push(type, type);
     }
     
     query += ` GROUP BY status`;
     
+    console.log('Query:', query);
+    console.log('Params:', params);
+    
     db.query(query, params, (err, results) => {
         if (err) {
             console.error('Data fetch error:', err);
-            return res.status(500).json({ error: 'Database error' });
+            return res.status(500).json({ error: err.message, query: query });
         }
+        
+        console.log('Data results:', results);
+        
+        // If no results, return empty array
+        if (!results || results.length === 0) {
+            return res.json([]);
+        }
+        
         res.json(results);
     });
 });
+    
 
 app.get('/mapdata', (req, res) => {
     const { table, district, type } = req.query;
     
+    console.log('Map data request:', { table, district, type });
+    
     let query = `
-        SELECT water_point_id, name as Name, type as Type, status, latitude as Latitude, longitude as Longitude 
+        SELECT 
+            water_point_id,
+            name as Name,
+            type as Type,
+            status,
+            latitude as Latitude,
+            longitude as Longitude
         FROM water_points 
-        WHERE district = ? 
+        WHERE LOWER(district) = LOWER(?)
     `;
     const params = [table];
     
     if (district && district !== '') {
-        query += ` AND ta = ?`;
-        params.push(district);
+        query += ` AND (ta = ? OR traditional_authority = ?)`;
+        params.push(district, district);
     }
     
     if (type && type !== '') {
-        query += ` AND type = ?`;
-        params.push(type);
+        query += ` AND (type = ? OR water_point_type = ?)`;
+        params.push(type, type);
     }
+    
+    query += ` LIMIT 1000`; // Limit results for performance
     
     db.query(query, params, (err, results) => {
         if (err) {
             console.error('Map data fetch error:', err);
-            return res.status(500).json({ error: 'Database error' });
+            return res.status(500).json({ error: err.message });
         }
+        
+        console.log('Map data points:', results.length);
         res.json(results);
     });
 });
-
+    
 app.get('/districts', (req, res) => {
     const { table } = req.query;
-    db.query(
-        'SELECT DISTINCT ta FROM water_points WHERE district = ? AND ta IS NOT NULL AND ta != "" ORDER BY ta',
-        [table],
-        (err, results) => {
-            if (err) {
-                console.error('Districts fetch error:', err);
-                return res.status(500).json({ error: 'Database error' });
-            }
-            res.json(results.map(r => r.ta));
+    
+    console.log('Districts request for table:', table);
+    
+    // Try different possible column names
+    let query = `
+        SELECT DISTINCT ta as district_name 
+        FROM water_points 
+        WHERE LOWER(district) = LOWER(?) 
+        AND (ta IS NOT NULL AND ta != '')
+        UNION
+        SELECT DISTINCT traditional_authority as district_name 
+        FROM water_points 
+        WHERE LOWER(district) = LOWER(?) 
+        AND (traditional_authority IS NOT NULL AND traditional_authority != '')
+    `;
+    
+    db.query(query, [table, table], (err, results) => {
+        if (err) {
+            console.error('Districts fetch error:', err);
+            return res.status(500).json({ error: err.message });
         }
-    );
+        
+        const districts = results.map(r => r.district_name).filter(Boolean);
+        console.log('Districts found:', districts);
+        res.json(districts);
+    });
 });
-
+        
+  
 app.get('/types', (req, res) => {
     const { table } = req.query;
-    db.query(
-        'SELECT DISTINCT type FROM water_points WHERE district = ? AND type IS NOT NULL AND type != "" ORDER BY type',
-        [table],
-        (err, results) => {
-            if (err) {
-                console.error('Types fetch error:', err);
-                return res.status(500).json({ error: 'Database error' });
-            }
-            res.json(results.map(r => r.type));
+    
+    console.log('Types request for table:', table);
+    
+    // Try different possible column names
+    let query = `
+        SELECT DISTINCT type as water_type 
+        FROM water_points 
+        WHERE LOWER(district) = LOWER(?) 
+        AND (type IS NOT NULL AND type != '')
+        UNION
+        SELECT DISTINCT water_point_type as water_type 
+        FROM water_points 
+        WHERE LOWER(district) = LOWER(?) 
+        AND (water_point_type IS NOT NULL AND water_point_type != '')
+    `;
+    
+    db.query(query, [table, table], (err, results) => {
+        if (err) {
+            console.error('Types fetch error:', err);
+            return res.status(500).json({ error: err.message });
         }
-    );
+        
+        const types = results.map(r => r.water_type).filter(Boolean);
+        console.log('Types found:', types);
+        res.json(types);
+    });
 });
-
+        
 app.get('/national', (req, res) => {
     db.query(`
         SELECT 
@@ -567,6 +625,24 @@ function recordDailySnapshot() {
         else console.log('Daily snapshot recorded at', new Date().toISOString());
     });
 }
+
+// Debug endpoint to check database structure
+app.get('/api/debug', (req, res) => {
+    db.query('SHOW TABLES', (err, tables) => {
+        if (err) {
+            return res.json({ error: err.message });
+        }
+        
+        // Get structure of water_points table
+        db.query('DESCRIBE water_points', (err2, structure) => {
+            res.json({
+                tables: tables,
+                water_points_structure: structure,
+                error: err2 ? err2.message : null
+            });
+        });
+    });
+});
 
 // Record snapshot on server start
 setTimeout(() => {
