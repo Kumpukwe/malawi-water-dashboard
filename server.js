@@ -5,7 +5,6 @@ const dotenv = require('dotenv');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
-const path = require('path');
 
 dotenv.config();
 
@@ -21,74 +20,76 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.static('.'));
 
-// Database connection with reconnection logic
-let db;
+// Database Connection Pool (FIXED)
+const pool = mysql.createPool({
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'malawi_water',
+    port: process.env.DB_PORT || 3306,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0
+});
 
-function connectToDatabase() {
-    db = mysql.createConnection({
-        host: process.env.DB_HOST || 'localhost',
-        user: process.env.DB_USER || 'root',
-        password: process.env.DB_PASSWORD || '',
-        database: process.env.DB_NAME || 'malawi_water',
-        port: process.env.DB_PORT || 3306,
-        connectTimeout: 60000,
-        enableKeepAlive: true,
-        keepAliveInitialDelay: 0
-    });
-
-    db.connect((err) => {
-        if (err) {
-            console.error('Database connection failed:', err);
-            setTimeout(connectToDatabase, 5000);
-            return;
-        }
-        console.log('Connected to MySQL database');
-        initializeDatabase();
-    });
-
-    db.on('error', (err) => {
-        console.error('Database error:', err);
-        if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
-            console.log('Reconnecting to database...');
-            connectToDatabase();
-        }
-    });
-}
-
-// Helper function to execute queries safely
+// Query helper function
 function executeQuery(query, params, callback) {
-    if (!db) {
-        console.log('Database not connected, reconnecting...');
-        connectToDatabase();
-        setTimeout(() => {
-            if (db) {
-                db.query(query, params, callback);
-            } else {
-                callback(new Error('Database connection failed'), null);
-            }
-        }, 1000);
-        return;
-    }
-    
-    db.query(query, params, (err, results) => {
-        if (err && (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET')) {
-            console.log('Connection lost, reconnecting...');
-            connectToDatabase();
-            setTimeout(() => {
-                if (db) {
-                    db.query(query, params, callback);
-                } else {
-                    callback(err, null);
-                }
-            }, 1000);
+    pool.query(query, params, (err, results) => {
+        if (err) {
+            console.error('Query error:', err);
+            callback(err, null);
         } else {
-            callback(err, results);
+            callback(null, results);
         }
     });
 }
+
+// Test connection
+pool.getConnection((err, connection) => {
+    if (err) {
+        console.error('Database connection failed:', err);
+    } else {
+        console.log('Connected to MySQL database');
+        connection.release();
+        initializeDatabase();
+    }
+});
 
 // Initialize database tables
 function initializeDatabase() {
+    const createWaterPointsTable = `
+        CREATE TABLE IF NOT EXISTS water_points (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            water_point_id VARCHAR(100) UNIQUE,
+            district VARCHAR(100),
+            name VARCHAR(255),
+            ta VARCHAR(255),
+            type VARCHAR(100),
+            status VARCHAR(100),
+            latitude DECIMAL(10, 6),
+            longitude DECIMAL(10, 6),
+            officer_name VARCHAR(100),
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+    `;
+    
+    const createOfficersTable = `
+        CREATE TABLE IF NOT EXISTS officers (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(100) UNIQUE,
+            email VARCHAR(255) UNIQUE,
+            password VARCHAR(255),
+            full_name VARCHAR(255),
+            district VARCHAR(100),
+            role VARCHAR(50),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `;
+    
     const createSnapshotTable = `
         CREATE TABLE IF NOT EXISTS historical_snapshots (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -101,35 +102,23 @@ function initializeDatabase() {
             total_count INT DEFAULT 0,
             functional_rate DECIMAL(5,2),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE KEY unique_district_date (district, snapshot_date),
-            INDEX idx_district_date (district, snapshot_date)
+            UNIQUE KEY unique_district_date (district, snapshot_date)
         )
     `;
     
-    const createChangeLogTable = `
-        CREATE TABLE IF NOT EXISTS status_change_log (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            water_point_id VARCHAR(100),
-            district VARCHAR(100),
-            old_status VARCHAR(100),
-            new_status VARCHAR(100),
-            changed_by VARCHAR(100),
-            notes TEXT,
-            changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_water_point (water_point_id),
-            INDEX idx_changed_at (changed_at),
-            INDEX idx_district (district)
-        )
-    `;
+    executeQuery(createWaterPointsTable, [], (err) => {
+        if (err) console.error('Error creating water_points table:', err);
+        else console.log('Water points table ready');
+    });
+    
+    executeQuery(createOfficersTable, [], (err) => {
+        if (err) console.error('Error creating officers table:', err);
+        else console.log('Officers table ready');
+    });
     
     executeQuery(createSnapshotTable, [], (err) => {
         if (err) console.error('Error creating snapshot table:', err);
         else console.log('Historical snapshots table ready');
-    });
-    
-    executeQuery(createChangeLogTable, [], (err) => {
-        if (err) console.error('Error creating change log table:', err);
-        else console.log('Status change log table ready');
     });
 }
 
@@ -317,14 +306,9 @@ app.get('/districts', (req, res) => {
         FROM water_points 
         WHERE LOWER(district) = LOWER(?) 
         AND (ta IS NOT NULL AND ta != '')
-        UNION
-        SELECT DISTINCT traditional_authority as district_name 
-        FROM water_points 
-        WHERE LOWER(district) = LOWER(?) 
-        AND (traditional_authority IS NOT NULL AND traditional_authority != '')
     `;
     
-    executeQuery(query, [table, table], (err, results) => {
+    executeQuery(query, [table], (err, results) => {
         if (err) {
             console.error('Districts fetch error:', err);
             return res.status(500).json({ error: err.message });
@@ -342,14 +326,9 @@ app.get('/types', (req, res) => {
         FROM water_points 
         WHERE LOWER(district) = LOWER(?) 
         AND (type IS NOT NULL AND type != '')
-        UNION
-        SELECT DISTINCT water_point_type as water_type 
-        FROM water_points 
-        WHERE LOWER(district) = LOWER(?) 
-        AND (water_point_type IS NOT NULL AND water_point_type != '')
     `;
     
-    executeQuery(query, [table, table], (err, results) => {
+    executeQuery(query, [table], (err, results) => {
         if (err) {
             console.error('Types fetch error:', err);
             return res.status(500).json({ error: err.message });
@@ -382,148 +361,8 @@ app.get('/national', (req, res) => {
     });
 });
 
-// ============ TREND ANALYSIS ENDPOINTS ============
+// ============ TEST ENDPOINTS ============
 
-app.get('/api/trends', (req, res) => {
-    const { district, period = '6months' } = req.query;
-    
-    let startDate;
-    const now = new Date();
-    switch(period) {
-        case '3months':
-            startDate = new Date(now.setMonth(now.getMonth() - 3)).toISOString().split('T')[0];
-            break;
-        case '6months':
-            startDate = new Date(now.setMonth(now.getMonth() - 6)).toISOString().split('T')[0];
-            break;
-        case '1year':
-            startDate = new Date(now.setFullYear(now.getFullYear() - 1)).toISOString().split('T')[0];
-            break;
-        default:
-            startDate = new Date(now.setMonth(now.getMonth() - 6)).toISOString().split('T')[0];
-    }
-    
-    const query = `
-        SELECT 
-            snapshot_date as date,
-            functional_count,
-            partially_functional_count,
-            not_functional_count,
-            abandoned_count,
-            total_count,
-            functional_rate
-        FROM historical_snapshots
-        WHERE district = ?
-        AND snapshot_date >= ?
-        ORDER BY snapshot_date ASC
-    `;
-    
-    executeQuery(query, [district, startDate], (err, results) => {
-        if (err) {
-            console.error('Trends fetch error:', err);
-            return res.status(500).json({ error: err.message });
-        }
-        res.json(results || []);
-    });
-});
-
-app.get('/api/monthly-summary', (req, res) => {
-    const { district } = req.query;
-    
-    const query = `
-        SELECT 
-            DATE_FORMAT(snapshot_date, '%Y-%m') as month,
-            AVG(functional_rate) as avg_functional_rate,
-            SUM(total_count) as total_points,
-            SUM(functional_count) as total_functional,
-            SUM(partially_functional_count) as total_partial,
-            SUM(not_functional_count) as total_not_functional
-        FROM historical_snapshots
-        WHERE district = ?
-        AND snapshot_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
-        GROUP BY DATE_FORMAT(snapshot_date, '%Y-%m')
-        ORDER BY month DESC
-    `;
-    
-    executeQuery(query, [district], (err, results) => {
-        if (err) {
-            console.error('Monthly summary error:', err);
-            return res.status(500).json({ error: err.message });
-        }
-        res.json(results || []);
-    });
-});
-
-// ============ DEBUG ENDPOINT ============
-
-app.get('/api/debug-db', (req, res) => {
-    executeQuery('SHOW TABLES', [], (err, tables) => {
-        executeQuery('DESCRIBE water_points', [], (err2, structure) => {
-            executeQuery('SELECT * FROM water_points LIMIT 5', [], (err3, sample) => {
-                res.json({
-                    tables: tables || [],
-                    structure: structure || [],
-                    sample_data: sample || [],
-                    errors: {
-                        tables_error: err?.message,
-                        structure_error: err2?.message,
-                        sample_error: err3?.message
-                    }
-                });
-            });
-        });
-    });
-});
-
-// ============ DAILY SNAPSHOT FUNCTION ============
-
-function recordDailySnapshot() {
-    const query = `
-        INSERT INTO historical_snapshots 
-        (district, snapshot_date, functional_count, partially_functional_count, not_functional_count, abandoned_count, total_count, functional_rate)
-        SELECT 
-            district,
-            CURDATE() as snapshot_date,
-            SUM(CASE WHEN status = 'Functional' THEN 1 ELSE 0 END) as functional_count,
-            SUM(CASE WHEN status = 'Partially functional but in need of repair' THEN 1 ELSE 0 END) as partially_functional_count,
-            SUM(CASE WHEN status = 'Not functional' THEN 1 ELSE 0 END) as not_functional_count,
-            SUM(CASE WHEN status = 'No longer exists or abandoned' THEN 1 ELSE 0 END) as abandoned_count,
-            COUNT(*) as total_count,
-            ROUND((SUM(CASE WHEN status = 'Functional' THEN 1 ELSE 0 END) / COUNT(*)) * 100, 2) as functional_rate
-        FROM water_points
-        GROUP BY district
-        ON DUPLICATE KEY UPDATE
-            functional_count = VALUES(functional_count),
-            partially_functional_count = VALUES(partially_functional_count),
-            not_functional_count = VALUES(not_functional_count),
-            abandoned_count = VALUES(abandoned_count),
-            total_count = VALUES(total_count),
-            functional_rate = VALUES(functional_rate)
-    `;
-    
-    executeQuery(query, [], (err) => {
-        if (err) console.error('Snapshot recording error:', err);
-        else console.log('Daily snapshot recorded');
-    });
-}
-
-// Start database connection
-connectToDatabase();
-
-// Record snapshot on server start
-setTimeout(() => {
-    recordDailySnapshot();
-}, 5000);
-
-// Schedule daily snapshot at midnight
-setInterval(() => {
-    const now = new Date();
-    if (now.getHours() === 0 && now.getMinutes() === 0) {
-        recordDailySnapshot();
-    }
-}, 60000);
-
-// Simple test endpoint
 app.get('/api/test', (req, res) => {
     executeQuery('SELECT COUNT(*) as count FROM water_points', [], (err, results) => {
         if (err) {
@@ -537,6 +376,44 @@ app.get('/api/test', (req, res) => {
         }
     });
 });
+
+app.get('/api/debug-db', (req, res) => {
+    executeQuery('SHOW TABLES', [], (err, tables) => {
+        executeQuery('SELECT * FROM water_points LIMIT 5', [], (err2, sample) => {
+            res.json({
+                tables: tables || [],
+                sample_data: sample || [],
+                errors: {
+                    tables_error: err?.message,
+                    sample_error: err2?.message
+                }
+            });
+        });
+    });
+});
+
+// ============ ADD SAMPLE DATA ============
+
+app.post('/api/add-sample-data', (req, res) => {
+    const sampleData = [
+        ['WP001', 'nsanje', 'Borehole A', 'TA Nsanje', 'Borehole', 'Functional', -16.9167, 35.2667],
+        ['WP002', 'nsanje', 'Well B', 'TA Nsanje', 'Well', 'Not functional', -16.9200, 35.2700],
+        ['WP003', 'blantyre', 'Borehole C', 'TA Blantyre', 'Borehole', 'Functional', -15.7861, 35.0058],
+        ['WP004', 'lilongwe', 'Tap D', 'TA Lilongwe', 'Tap Stand', 'Partially functional but in need of repair', -13.9833, 33.7833],
+        ['WP005', 'zomba', 'Well E', 'TA Zomba', 'Well', 'Functional', -15.3833, 35.3333]
+    ];
+    
+    const query = `INSERT IGNORE INTO water_points (water_point_id, district, name, ta, type, status, latitude, longitude) VALUES ?`;
+    
+    executeQuery(query, [sampleData], (err, result) => {
+        if (err) {
+            res.json({ error: err.message });
+        } else {
+            res.json({ success: true, inserted: result.affectedRows });
+        }
+    });
+});
+
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
