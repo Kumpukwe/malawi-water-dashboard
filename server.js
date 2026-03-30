@@ -29,9 +29,7 @@ const pool = mysql.createPool({
     port: process.env.DB_PORT || 3306,
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0,
-    enableKeepAlive: true,
-    keepAliveInitialDelay: 0
+    queueLimit: 0
 });
 
 function executeQuery(query, params, callback) {
@@ -133,7 +131,7 @@ app.post('/api/add-water-point', authenticateToken, (req, res) => {
     });
 });
 
-// ============ DATA ENDPOINTS (FIXED FOR DISTRICT TABLES) ============
+// ============ DATA ENDPOINTS ============
 
 app.get('/data', (req, res) => {
     const { table, district, type } = req.query;
@@ -147,8 +145,8 @@ app.get('/data', (req, res) => {
     const params = [];
     
     if (district && district !== '') {
-        query += ` AND (TA = ? OR Traditional_Authority = ?)`;
-        params.push(district, district);
+        query += ` AND TA = ?`;
+        params.push(district);
     }
     
     if (type && type !== '') {
@@ -185,8 +183,8 @@ app.get('/mapdata', (req, res) => {
     const params = [];
     
     if (district && district !== '') {
-        query += ` AND (TA = ? OR Traditional_Authority = ?)`;
-        params.push(district, district);
+        query += ` AND TA = ?`;
+        params.push(district);
     }
     
     if (type && type !== '') {
@@ -213,10 +211,6 @@ app.get('/districts', (req, res) => {
         SELECT DISTINCT TA as district_name 
         FROM ${tableName}
         WHERE TA IS NOT NULL AND TA != ''
-        UNION
-        SELECT DISTINCT Traditional_Authority as district_name 
-        FROM ${tableName}
-        WHERE Traditional_Authority IS NOT NULL AND Traditional_Authority != ''
     `;
     
     executeQuery(query, [], (err, results) => {
@@ -264,6 +258,10 @@ app.get('/national', (req, res) => {
         let completed = 0;
         const results = [];
         
+        if (districtTables.length === 0) {
+            return res.json([]);
+        }
+        
         districtTables.forEach(tableName => {
             const query = `
                 SELECT 
@@ -286,15 +284,10 @@ app.get('/national', (req, res) => {
                 }
             });
         });
-        
-        if (districtTables.length === 0) {
-            res.json([]);
-        }
     });
 });
 
-// ============ TEST ENDPOINTS ============
-
+// Simple test endpoint
 app.get('/api/test', (req, res) => {
     executeQuery("SHOW TABLES", [], (err, tables) => {
         if (err) {
@@ -306,19 +299,9 @@ app.get('/api/test', (req, res) => {
             res.json({ 
                 hasData: districtTables.length > 0,
                 districtCount: districtTables.length,
-                tables: districtTables,
-                error: null 
+                tables: districtTables
             });
         }
-    });
-});
-
-app.get('/api/debug-db', (req, res) => {
-    executeQuery("SHOW TABLES", [], (err, tables) => {
-        res.json({
-            tables: tables || [],
-            error: err?.message
-        });
     });
 });
 
