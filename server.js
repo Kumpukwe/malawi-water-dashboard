@@ -75,7 +75,7 @@ app.get('/api/me', authenticateToken, (req, res) => {
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     executeQuery(
-        'SELECT * FROM officers WHERE username = ? OR email = ?',
+        'SELECT * FROM users WHERE username = ? OR email = ?',  // Changed from officers to users
         [username, username],
         async (err, results) => {
             if (err || results.length === 0) {
