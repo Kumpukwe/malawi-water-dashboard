@@ -20,7 +20,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.static('.'));
 
-// Database Connection Pool (FIXED)
+// Database Connection Pool
 const pool = mysql.createPool({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
@@ -34,7 +34,6 @@ const pool = mysql.createPool({
     keepAliveInitialDelay: 0
 });
 
-// Query helper function
 function executeQuery(query, params, callback) {
     pool.query(query, params, (err, results) => {
         if (err) {
@@ -46,93 +45,20 @@ function executeQuery(query, params, callback) {
     });
 }
 
-// Test connection
 pool.getConnection((err, connection) => {
     if (err) {
         console.error('Database connection failed:', err);
     } else {
         console.log('Connected to MySQL database');
         connection.release();
-        initializeDatabase();
     }
 });
 
-// Initialize database tables
-function initializeDatabase() {
-    const createWaterPointsTable = `
-        CREATE TABLE IF NOT EXISTS water_points (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            water_point_id VARCHAR(100) UNIQUE,
-            district VARCHAR(100),
-            name VARCHAR(255),
-            ta VARCHAR(255),
-            type VARCHAR(100),
-            status VARCHAR(100),
-            latitude DECIMAL(10, 6),
-            longitude DECIMAL(10, 6),
-            officer_name VARCHAR(100),
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        )
-    `;
-    
-    const createOfficersTable = `
-        CREATE TABLE IF NOT EXISTS officers (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            username VARCHAR(100) UNIQUE,
-            email VARCHAR(255) UNIQUE,
-            password VARCHAR(255),
-            full_name VARCHAR(255),
-            district VARCHAR(100),
-            role VARCHAR(50),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    `;
-    
-    const createSnapshotTable = `
-        CREATE TABLE IF NOT EXISTS historical_snapshots (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            district VARCHAR(100),
-            snapshot_date DATE,
-            functional_count INT DEFAULT 0,
-            partially_functional_count INT DEFAULT 0,
-            not_functional_count INT DEFAULT 0,
-            abandoned_count INT DEFAULT 0,
-            total_count INT DEFAULT 0,
-            functional_rate DECIMAL(5,2),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE KEY unique_district_date (district, snapshot_date)
-        )
-    `;
-    
-    executeQuery(createWaterPointsTable, [], (err) => {
-        if (err) console.error('Error creating water_points table:', err);
-        else console.log('Water points table ready');
-    });
-    
-    executeQuery(createOfficersTable, [], (err) => {
-        if (err) console.error('Error creating officers table:', err);
-        else console.log('Officers table ready');
-    });
-    
-    executeQuery(createSnapshotTable, [], (err) => {
-        if (err) console.error('Error creating snapshot table:', err);
-        else console.log('Historical snapshots table ready');
-    });
-}
-
-// JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
 
-// Middleware to verify JWT
 const authenticateToken = (req, res, next) => {
     const token = req.cookies.token;
-    
-    if (!token) {
-        return res.status(401).json({ error: 'Access denied' });
-    }
-    
+    if (!token) return res.status(401).json({ error: 'Access denied' });
     try {
         const verified = jwt.verify(token, JWT_SECRET);
         req.user = verified;
@@ -150,7 +76,6 @@ app.get('/api/me', authenticateToken, (req, res) => {
 
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
-    
     executeQuery(
         'SELECT * FROM officers WHERE username = ? OR email = ?',
         [username, username],
@@ -158,42 +83,25 @@ app.post('/api/login', (req, res) => {
             if (err || results.length === 0) {
                 return res.status(401).json({ error: 'Invalid credentials' });
             }
-            
             const user = results[0];
             const validPassword = await bcrypt.compare(password, user.password);
-            
             if (!validPassword) {
                 return res.status(401).json({ error: 'Invalid credentials' });
             }
-            
             const token = jwt.sign(
-                { 
-                    id: user.id, 
-                    username: user.username,
-                    full_name: user.full_name,
-                    district: user.district,
-                    role: user.role 
-                },
+                { id: user.id, username: user.username, full_name: user.full_name, district: user.district, role: user.role },
                 JWT_SECRET,
                 { expiresIn: '7d' }
             );
-            
             res.cookie('token', token, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: 'lax',
                 maxAge: 7 * 24 * 60 * 60 * 1000
             });
-            
             res.json({
                 success: true,
-                user: {
-                    id: user.id,
-                    username: user.username,
-                    full_name: user.full_name,
-                    district: user.district,
-                    role: user.role
-                }
+                user: { id: user.id, username: user.username, full_name: user.full_name, district: user.district, role: user.role }
             });
         }
     );
@@ -212,45 +120,43 @@ app.post('/api/add-water-point', authenticateToken, (req, res) => {
     }
     
     const water_point_id = `WP_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const tableName = district.toLowerCase();
     
-    executeQuery(
-        `INSERT INTO water_points 
-        (water_point_id, district, name, ta, type, status, latitude, longitude, officer_name, notes, created_at) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-        [water_point_id, district, name, ta, type, status, latitude, longitude, officer_name || req.user.username, notes],
-        (err, result) => {
-            if (err) {
-                console.error('Error adding water point:', err);
-                return res.status(500).json({ error: 'Database error' });
-            }
-            res.json({ success: true, water_point_id });
+    const query = `INSERT INTO ${tableName} (water_point_id, Name, Type, TA, Functionality_Status, Latitude, Longitude) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+    
+    executeQuery(query, [water_point_id, name, type, ta, status, latitude, longitude], (err, result) => {
+        if (err) {
+            console.error('Error adding water point:', err);
+            return res.status(500).json({ error: 'Database error: ' + err.message });
         }
-    );
+        res.json({ success: true, water_point_id });
+    });
 });
 
-// ============ DATA ENDPOINTS ============
+// ============ DATA ENDPOINTS (FIXED FOR DISTRICT TABLES) ============
 
 app.get('/data', (req, res) => {
     const { table, district, type } = req.query;
+    const tableName = table.toLowerCase();
     
     let query = `
-        SELECT status, COUNT(*) as total 
-        FROM water_points 
-        WHERE LOWER(district) = LOWER(?)
+        SELECT Functionality_Status as status, COUNT(*) as total 
+        FROM ${tableName}
+        WHERE 1=1
     `;
-    const params = [table];
+    const params = [];
     
     if (district && district !== '') {
-        query += ` AND (ta = ? OR traditional_authority = ?)`;
+        query += ` AND (TA = ? OR Traditional_Authority = ?)`;
         params.push(district, district);
     }
     
     if (type && type !== '') {
-        query += ` AND (type = ? OR water_point_type = ?)`;
-        params.push(type, type);
+        query += ` AND Type = ?`;
+        params.push(type);
     }
     
-    query += ` GROUP BY status`;
+    query += ` GROUP BY Functionality_Status`;
     
     executeQuery(query, params, (err, results) => {
         if (err) {
@@ -263,28 +169,29 @@ app.get('/data', (req, res) => {
 
 app.get('/mapdata', (req, res) => {
     const { table, district, type } = req.query;
+    const tableName = table.toLowerCase();
     
     let query = `
         SELECT 
             water_point_id,
-            name as Name,
-            type as Type,
-            status,
-            latitude as Latitude,
-            longitude as Longitude
-        FROM water_points 
-        WHERE LOWER(district) = LOWER(?)
+            Name,
+            Type,
+            Functionality_Status as status,
+            Latitude,
+            Longitude
+        FROM ${tableName}
+        WHERE Latitude IS NOT NULL AND Longitude IS NOT NULL
     `;
-    const params = [table];
+    const params = [];
     
     if (district && district !== '') {
-        query += ` AND (ta = ? OR traditional_authority = ?)`;
+        query += ` AND (TA = ? OR Traditional_Authority = ?)`;
         params.push(district, district);
     }
     
     if (type && type !== '') {
-        query += ` AND (type = ? OR water_point_type = ?)`;
-        params.push(type, type);
+        query += ` AND Type = ?`;
+        params.push(type);
     }
     
     query += ` LIMIT 1000`;
@@ -300,15 +207,19 @@ app.get('/mapdata', (req, res) => {
 
 app.get('/districts', (req, res) => {
     const { table } = req.query;
+    const tableName = table.toLowerCase();
     
     const query = `
-        SELECT DISTINCT ta as district_name 
-        FROM water_points 
-        WHERE LOWER(district) = LOWER(?) 
-        AND (ta IS NOT NULL AND ta != '')
+        SELECT DISTINCT TA as district_name 
+        FROM ${tableName}
+        WHERE TA IS NOT NULL AND TA != ''
+        UNION
+        SELECT DISTINCT Traditional_Authority as district_name 
+        FROM ${tableName}
+        WHERE Traditional_Authority IS NOT NULL AND Traditional_Authority != ''
     `;
     
-    executeQuery(query, [table], (err, results) => {
+    executeQuery(query, [], (err, results) => {
         if (err) {
             console.error('Districts fetch error:', err);
             return res.status(500).json({ error: err.message });
@@ -320,15 +231,15 @@ app.get('/districts', (req, res) => {
 
 app.get('/types', (req, res) => {
     const { table } = req.query;
+    const tableName = table.toLowerCase();
     
     const query = `
-        SELECT DISTINCT type as water_type 
-        FROM water_points 
-        WHERE LOWER(district) = LOWER(?) 
-        AND (type IS NOT NULL AND type != '')
+        SELECT DISTINCT Type as water_type 
+        FROM ${tableName}
+        WHERE Type IS NOT NULL AND Type != ''
     `;
     
-    executeQuery(query, [table], (err, results) => {
+    executeQuery(query, [], (err, results) => {
         if (err) {
             console.error('Types fetch error:', err);
             return res.status(500).json({ error: err.message });
@@ -339,38 +250,63 @@ app.get('/types', (req, res) => {
 });
 
 app.get('/national', (req, res) => {
-    const query = `
-        SELECT 
-            district,
-            COUNT(*) as total,
-            SUM(CASE WHEN status = 'Functional' THEN 1 ELSE 0 END) as functional,
-            SUM(CASE WHEN status = 'Partially functional but in need of repair' THEN 1 ELSE 0 END) as partial,
-            SUM(CASE WHEN status = 'Not functional' THEN 1 ELSE 0 END) as not_functional,
-            SUM(CASE WHEN status = 'No longer exists or abandoned' THEN 1 ELSE 0 END) as abandoned
-        FROM water_points
-        GROUP BY district
-        ORDER BY district
-    `;
-    
-    executeQuery(query, [], (err, results) => {
+    // Get list of all district tables
+    executeQuery("SHOW TABLES", [], (err, tables) => {
         if (err) {
             console.error('National fetch error:', err);
             return res.status(500).json({ error: err.message });
         }
-        res.json(results || []);
+        
+        const districtTables = tables.map(t => Object.values(t)[0]).filter(t => 
+            !['officers', 'historical_snapshots', 'status_change_log'].includes(t)
+        );
+        
+        let completed = 0;
+        const results = [];
+        
+        districtTables.forEach(tableName => {
+            const query = `
+                SELECT 
+                    '${tableName}' as district,
+                    COUNT(*) as total,
+                    SUM(CASE WHEN Functionality_Status = 'Functional' THEN 1 ELSE 0 END) as functional,
+                    SUM(CASE WHEN Functionality_Status = 'Partially functional but in need of repair' THEN 1 ELSE 0 END) as partial,
+                    SUM(CASE WHEN Functionality_Status = 'Not functional' THEN 1 ELSE 0 END) as not_functional,
+                    SUM(CASE WHEN Functionality_Status = 'No longer exists or abandoned' THEN 1 ELSE 0 END) as abandoned
+                FROM ${tableName}
+            `;
+            
+            executeQuery(query, [], (err2, row) => {
+                if (!err2 && row && row.length > 0) {
+                    results.push(row[0]);
+                }
+                completed++;
+                if (completed === districtTables.length) {
+                    res.json(results);
+                }
+            });
+        });
+        
+        if (districtTables.length === 0) {
+            res.json([]);
+        }
     });
 });
 
 // ============ TEST ENDPOINTS ============
 
 app.get('/api/test', (req, res) => {
-    executeQuery('SELECT COUNT(*) as count FROM water_points', [], (err, results) => {
+    executeQuery("SHOW TABLES", [], (err, tables) => {
         if (err) {
             res.json({ error: err.message, hasData: false });
         } else {
+            const districtTables = tables.map(t => Object.values(t)[0]).filter(t => 
+                !['officers', 'historical_snapshots', 'status_change_log'].includes(t)
+            );
             res.json({ 
-                hasData: results[0].count > 0,
-                count: results[0].count,
+                hasData: districtTables.length > 0,
+                districtCount: districtTables.length,
+                tables: districtTables,
                 error: null 
             });
         }
@@ -378,39 +314,11 @@ app.get('/api/test', (req, res) => {
 });
 
 app.get('/api/debug-db', (req, res) => {
-    executeQuery('SHOW TABLES', [], (err, tables) => {
-        executeQuery('SELECT * FROM water_points LIMIT 5', [], (err2, sample) => {
-            res.json({
-                tables: tables || [],
-                sample_data: sample || [],
-                errors: {
-                    tables_error: err?.message,
-                    sample_error: err2?.message
-                }
-            });
+    executeQuery("SHOW TABLES", [], (err, tables) => {
+        res.json({
+            tables: tables || [],
+            error: err?.message
         });
-    });
-});
-
-// ============ ADD SAMPLE DATA ============
-
-app.post('/api/add-sample-data', (req, res) => {
-    const sampleData = [
-        ['WP001', 'nsanje', 'Borehole A', 'TA Nsanje', 'Borehole', 'Functional', -16.9167, 35.2667],
-        ['WP002', 'nsanje', 'Well B', 'TA Nsanje', 'Well', 'Not functional', -16.9200, 35.2700],
-        ['WP003', 'blantyre', 'Borehole C', 'TA Blantyre', 'Borehole', 'Functional', -15.7861, 35.0058],
-        ['WP004', 'lilongwe', 'Tap D', 'TA Lilongwe', 'Tap Stand', 'Partially functional but in need of repair', -13.9833, 33.7833],
-        ['WP005', 'zomba', 'Well E', 'TA Zomba', 'Well', 'Functional', -15.3833, 35.3333]
-    ];
-    
-    const query = `INSERT IGNORE INTO water_points (water_point_id, district, name, ta, type, status, latitude, longitude) VALUES ?`;
-    
-    executeQuery(query, [sampleData], (err, result) => {
-        if (err) {
-            res.json({ error: err.message });
-        } else {
-            res.json({ success: true, inserted: result.affectedRows });
-        }
     });
 });
 
