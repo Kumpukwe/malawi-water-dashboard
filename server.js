@@ -319,7 +319,16 @@ app.get('/api/debug-tables', (req, res) => {
         }
     });
 });
-
+// Check officers in database
+app.get('/api/list-officers', (req, res) => {
+    executeQuery("SELECT username, district, role, full_name FROM officers", [], (err, results) => {
+        if (err) {
+            res.json({ error: err.message });
+        } else {
+            res.json({ officers: results });
+        }
+    });
+});
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
