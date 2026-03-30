@@ -523,6 +523,20 @@ setInterval(() => {
     }
 }, 60000);
 
+// Simple test endpoint
+app.get('/api/test', (req, res) => {
+    executeQuery('SELECT COUNT(*) as count FROM water_points', [], (err, results) => {
+        if (err) {
+            res.json({ error: err.message, hasData: false });
+        } else {
+            res.json({ 
+                hasData: results[0].count > 0,
+                count: results[0].count,
+                error: null 
+            });
+        }
+    });
+});
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
