@@ -244,7 +244,6 @@ app.get('/types', (req, res) => {
 });
 
 app.get('/national', (req, res) => {
-    // Get list of all district tables
     executeQuery("SHOW TABLES", [], (err, tables) => {
         if (err) {
             console.error('National fetch error:', err);
@@ -287,7 +286,8 @@ app.get('/national', (req, res) => {
     });
 });
 
-// Simple test endpoint
+// ============ TEST & DEBUG ENDPOINTS ============
+
 app.get('/api/test', (req, res) => {
     executeQuery("SHOW TABLES", [], (err, tables) => {
         if (err) {
@@ -300,6 +300,21 @@ app.get('/api/test', (req, res) => {
                 hasData: districtTables.length > 0,
                 districtCount: districtTables.length,
                 tables: districtTables
+            });
+        }
+    });
+});
+
+app.get('/api/debug-tables', (req, res) => {
+    executeQuery("SHOW TABLES", [], (err, results) => {
+        if (err) {
+            res.json({ error: err.message });
+        } else {
+            const tables = results.map(row => Object.values(row)[0]);
+            res.json({ 
+                tables: tables,
+                count: tables.length,
+                database: process.env.DB_NAME
             });
         }
     });
