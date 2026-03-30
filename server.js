@@ -5,189 +5,379 @@ const dotenv = require('dotenv');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
+const path = require('path');
 
 dotenv.config();
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
 app.use(cors({
-    origin: ['https://malawi-water-dashboard.up.railway.app', 'http://localhost:3000'],
+    origin: process.env.CLIENT_URL || '*',
     credentials: true
 }));
 app.use(express.json());
 app.use(cookieParser());
-app.use(express.static(__dirname));
+app.use(express.static('.')); // Serve static files
 
-// JWT Secret
-const JWT_SECRET = process.env.JWT_SECRET || 'malawi-water-dashboard-secret-key-2026';
-
-// Determine environment
-const isDevelopment = process.env.NODE_ENV === 'development';
-
-// Database configuration
-let dbConfig;
-
-if (isDevelopment) {
-    console.log('🔧 Running in DEVELOPMENT mode with XAMPP');
-    dbConfig = {
-        host: process.env.DB_HOST || 'localhost',
-        user: process.env.DB_USER || 'root',
-        password: process.env.DB_PASSWORD || '',
-        database: process.env.DB_NAME || 'malawi_districts_water',
-        port: process.env.DB_PORT || 3306,
-        connectionLimit: 10
-    };
-} else {
-    console.log('🚀 Running in PRODUCTION mode with Railway MySQL');
-    dbConfig = {
-        host: process.env.MYSQLHOST,
-        user: process.env.MYSQLUSER,
-        password: process.env.MYSQLPASSWORD,
-        database: process.env.MYSQLDATABASE,
-        port: process.env.MYSQLPORT || 3306,
-        connectionLimit: 10
-    };
-}
-
-const db = mysql.createConnection(dbConfig);
+// Database connection
+const db = mysql.createConnection({
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'malawi_water',
+    port: process.env.DB_PORT || 3306
+});
 
 db.connect((err) => {
     if (err) {
-        console.error('❌ Database connection failed:', err.message);
-    } else {
-        console.log(`✅ Connected to MySQL database`);
+        console.error('Database connection failed:', err);
+        return;
     }
+    console.log('Connected to MySQL database');
+    
+    // Create tables if they don't exist
+    initializeDatabase();
 });
 
-// ============ AUTHENTICATION TABLES ============
-const createUsersTable = `
-CREATE TABLE IF NOT EXISTS users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    email VARCHAR(100) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    role ENUM('admin', 'officer', 'viewer') DEFAULT 'viewer',
-    district VARCHAR(50),
-    full_name VARCHAR(100),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_login TIMESTAMP NULL
-)`;
-
-db.query(createUsersTable, (err) => {
-    if (err) console.error('Error creating users table:', err);
-    else console.log('✅ Users table ready');
-});
-
-// Create default users
-const createDefaultUsers = `
-INSERT IGNORE INTO users (username, email, password, role, district, full_name) VALUES 
-('admin', 'admin@baseflow.com', ?, 'admin', NULL, 'System Administrator'),
-('officer', 'officer@baseflow.com', ?, 'officer', 'nsanje', 'District Officer'),
-('viewer', 'viewer@baseflow.com', ?, 'viewer', NULL, 'Public Viewer')`;
-
-bcrypt.hash('admin123', 10, (err, adminHash) => {
-    if (err) return;
-    bcrypt.hash('officer123', 10, (err, officerHash) => {
-        if (err) return;
-        bcrypt.hash('viewer123', 10, (err, viewerHash) => {
-            if (err) return;
-            db.query(createDefaultUsers, [adminHash, officerHash, viewerHash], (err) => {
-                if (err) console.error('Error creating default users:', err);
-                else console.log('✅ Default users created');
-            });
-        });
+// Initialize database tables
+function initializeDatabase() {
+    // Create historical_snapshots table
+    const createSnapshotTable = `
+        CREATE TABLE IF NOT EXISTS historical_snapshots (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            district VARCHAR(100),
+            snapshot_date DATE,
+            functional_count INT DEFAULT 0,
+            partially_functional_count INT DEFAULT 0,
+            not_functional_count INT DEFAULT 0,
+            abandoned_count INT DEFAULT 0,
+            total_count INT DEFAULT 0,
+            functional_rate DECIMAL(5,2),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_district_date (district, snapshot_date),
+            INDEX idx_district_date (district, snapshot_date)
+        )
+    `;
+    
+    // Create status_change_log table
+    const createChangeLogTable = `
+        CREATE TABLE IF NOT EXISTS status_change_log (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            water_point_id VARCHAR(100),
+            district VARCHAR(100),
+            old_status VARCHAR(100),
+            new_status VARCHAR(100),
+            changed_by VARCHAR(100),
+            notes TEXT,
+            changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_water_point (water_point_id),
+            INDEX idx_changed_at (changed_at),
+            INDEX idx_district (district)
+        )
+    `;
+    
+    db.query(createSnapshotTable, (err) => {
+        if (err) console.error('Error creating snapshot table:', err);
+        else console.log('Historical snapshots table ready');
     });
-});
+    
+    db.query(createChangeLogTable, (err) => {
+        if (err) console.error('Error creating change log table:', err);
+        else console.log('Status change log table ready');
+    });
+}
 
-// ============ AUTHENTICATION MIDDLEWARE ============
+// JWT Secret
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
+
+// Middleware to verify JWT
 const authenticateToken = (req, res, next) => {
-    const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+    const token = req.cookies.token;
     
     if (!token) {
-        return res.status(401).json({ error: 'Access denied. Please login.' });
+        return res.status(401).json({ error: 'Access denied' });
     }
     
-    jwt.verify(token, JWT_SECRET, (err, user) => {
+    try {
+        const verified = jwt.verify(token, JWT_SECRET);
+        req.user = verified;
+        next();
+    } catch (err) {
+        res.status(401).json({ error: 'Invalid token' });
+    }
+};
+
+// ============ TREND ANALYSIS ENDPOINTS ============
+
+// Get historical trends for a district
+app.get('/api/trends', (req, res) => {
+    const { district, startDate, endDate, period = '6months' } = req.query;
+    
+    let startDateParam = startDate;
+    if (!startDateParam && period) {
+        const now = new Date();
+        switch(period) {
+            case '3months':
+                startDateParam = new Date(now.setMonth(now.getMonth() - 3)).toISOString().split('T')[0];
+                break;
+            case '6months':
+                startDateParam = new Date(now.setMonth(now.getMonth() - 6)).toISOString().split('T')[0];
+                break;
+            case '1year':
+                startDateParam = new Date(now.setFullYear(now.getFullYear() - 1)).toISOString().split('T')[0];
+                break;
+            case '2years':
+                startDateParam = new Date(now.setFullYear(now.getFullYear() - 2)).toISOString().split('T')[0];
+                break;
+            default:
+                startDateParam = new Date(now.setMonth(now.getMonth() - 6)).toISOString().split('T')[0];
+        }
+    }
+    
+    const endDateParam = endDate || new Date().toISOString().split('T')[0];
+    
+    let query = `
+        SELECT 
+            snapshot_date as date,
+            functional_count,
+            partially_functional_count,
+            not_functional_count,
+            abandoned_count,
+            total_count,
+            functional_rate
+        FROM historical_snapshots
+        WHERE district = ?
+        AND snapshot_date >= ?
+        AND snapshot_date <= ?
+        ORDER BY snapshot_date ASC
+    `;
+    
+    db.query(query, [district, startDateParam, endDateParam], (err, results) => {
         if (err) {
-            return res.status(403).json({ error: 'Invalid or expired token' });
+            console.error('Trends fetch error:', err);
+            return res.status(500).json({ error: 'Database error' });
         }
-        req.user = user;
-        next();
-    });
-};
-
-const authorizeRole = (...roles) => {
-    return (req, res, next) => {
-        if (!roles.includes(req.user.role)) {
-            return res.status(403).json({ error: 'Access denied. Insufficient permissions.' });
-        }
-        next();
-    };
-};
-
-// ============ AUTHENTICATION ENDPOINTS ============
-
-// Register new user (admin only)
-app.post('/api/register', authenticateToken, authorizeRole('admin'), (req, res) => {
-    const { username, email, password, role, district, full_name } = req.body;
-    
-    if (!username || !email || !password) {
-        return res.status(400).json({ error: 'Username, email, and password required' });
-    }
-    
-    bcrypt.hash(password, 10, (err, hash) => {
-        if (err) return res.status(500).json({ error: 'Error hashing password' });
-        
-        const sql = `INSERT INTO users (username, email, password, role, district, full_name) 
-                     VALUES (?, ?, ?, ?, ?, ?)`;
-        db.query(sql, [username, email, hash, role || 'viewer', district, full_name], (err, result) => {
-            if (err) {
-                if (err.code === 'ER_DUP_ENTRY') {
-                    return res.status(400).json({ error: 'Username or email already exists' });
-                }
-                return res.status(500).json({ error: 'Database error' });
-            }
-            res.json({ success: true, message: 'User created successfully' });
-        });
+        res.json(results);
     });
 });
 
-// Login
+// Get district comparison trends
+app.get('/api/trends/comparison', (req, res) => {
+    const { districts, metric = 'functional_rate' } = req.query;
+    
+    if (!districts) {
+        return res.status(400).json({ error: 'Districts parameter required' });
+    }
+    
+    const districtList = districts.split(',');
+    const placeholders = districtList.map(() => '?').join(',');
+    
+    const query = `
+        SELECT 
+            district,
+            snapshot_date as date,
+            functional_rate,
+            functional_count,
+            total_count
+        FROM historical_snapshots
+        WHERE district IN (${placeholders})
+        AND snapshot_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+        ORDER BY district, snapshot_date ASC
+    `;
+    
+    db.query(query, districtList, (err, results) => {
+        if (err) {
+            console.error('Comparison fetch error:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        
+        // Group by district
+        const grouped = {};
+        results.forEach(row => {
+            if (!grouped[row.district]) {
+                grouped[row.district] = [];
+            }
+            grouped[row.district].push({
+                date: row.date,
+                value: parseFloat(row.functional_rate),
+                functional: row.functional_count,
+                total: row.total_count
+            });
+        });
+        
+        res.json(grouped);
+    });
+});
+
+// Get monthly summary for a district
+app.get('/api/monthly-summary', (req, res) => {
+    const { district } = req.query;
+    
+    const query = `
+        SELECT 
+            DATE_FORMAT(snapshot_date, '%Y-%m') as month,
+            AVG(functional_rate) as avg_functional_rate,
+            SUM(total_count) as total_points,
+            SUM(functional_count) as total_functional,
+            SUM(partially_functional_count) as total_partial,
+            SUM(not_functional_count) as total_not_functional,
+            SUM(abandoned_count) as total_abandoned
+        FROM historical_snapshots
+        WHERE district = ?
+        AND snapshot_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+        GROUP BY DATE_FORMAT(snapshot_date, '%Y-%m')
+        ORDER BY month DESC
+    `;
+    
+    db.query(query, [district], (err, results) => {
+        if (err) {
+            console.error('Monthly summary error:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(results);
+    });
+});
+
+// Get trend statistics (improvement rate, best/worst months)
+app.get('/api/trend-stats', (req, res) => {
+    const { district } = req.query;
+    
+    const query = `
+        SELECT 
+            MIN(snapshot_date) as first_date,
+            MAX(snapshot_date) as last_date,
+            MIN(functional_rate) as min_rate,
+            MAX(functional_rate) as max_rate,
+            (
+                SELECT functional_rate 
+                FROM historical_snapshots h2 
+                WHERE h2.district = ? 
+                ORDER BY snapshot_date ASC 
+                LIMIT 1
+            ) as first_rate,
+            (
+                SELECT functional_rate 
+                FROM historical_snapshots h2 
+                WHERE h2.district = ? 
+                ORDER BY snapshot_date DESC 
+                LIMIT 1
+            ) as last_rate,
+            COUNT(*) as total_snapshots
+        FROM historical_snapshots
+        WHERE district = ?
+        AND snapshot_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+    `;
+    
+    db.query(query, [district, district, district], (err, results) => {
+        if (err) {
+            console.error('Trend stats error:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(results[0]);
+    });
+});
+
+// Record status change
+app.post('/api/record-status-change', authenticateToken, (req, res) => {
+    const { water_point_id, old_status, new_status, notes } = req.body;
+    
+    // First get the district for this water point
+    db.query(
+        'SELECT district FROM water_points WHERE water_point_id = ?',
+        [water_point_id],
+        (err, results) => {
+            if (err || results.length === 0) {
+                return res.status(500).json({ error: 'Water point not found' });
+            }
+            
+            const district = results[0].district;
+            
+            const insertQuery = `
+                INSERT INTO status_change_log 
+                (water_point_id, district, old_status, new_status, changed_by, notes)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `;
+            
+            db.query(insertQuery, [water_point_id, district, old_status, new_status, req.user.username, notes], (err) => {
+                if (err) {
+                    console.error('Status change log error:', err);
+                    return res.status(500).json({ error: 'Database error' });
+                }
+                res.json({ success: true });
+            });
+        }
+    );
+});
+
+// Get status change history for a water point
+app.get('/api/status-history', (req, res) => {
+    const { water_point_id } = req.query;
+    
+    const query = `
+        SELECT 
+            old_status,
+            new_status,
+            changed_by,
+            notes,
+            changed_at
+        FROM status_change_log
+        WHERE water_point_id = ?
+        ORDER BY changed_at DESC
+        LIMIT 20
+    `;
+    
+    db.query(query, [water_point_id], (err, results) => {
+        if (err) {
+            console.error('Status history error:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(results);
+    });
+});
+
+// ============ EXISTING AUTH ENDPOINTS ============
+
+app.get('/api/me', authenticateToken, (req, res) => {
+    res.json(req.user);
+});
+
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     
-    if (!username || !password) {
-        return res.status(400).json({ error: 'Username and password required' });
-    }
-    
-    const sql = 'SELECT * FROM users WHERE username = ? OR email = ?';
-    db.query(sql, [username, username], (err, users) => {
-        if (err) return res.status(500).json({ error: 'Database error' });
-        if (users.length === 0) {
-            return res.status(401).json({ error: 'Invalid username or password' });
-        }
-        
-        const user = users[0];
-        bcrypt.compare(password, user.password, (err, isValid) => {
-            if (err || !isValid) {
-                return res.status(401).json({ error: 'Invalid username or password' });
+    db.query(
+        'SELECT * FROM officers WHERE username = ? OR email = ?',
+        [username, username],
+        async (err, results) => {
+            if (err || results.length === 0) {
+                return res.status(401).json({ error: 'Invalid credentials' });
             }
             
-            // Update last login
-            db.query('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
+            const user = results[0];
+            const validPassword = await bcrypt.compare(password, user.password);
             
-            // Create token
+            if (!validPassword) {
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
+            
             const token = jwt.sign(
-                { id: user.id, username: user.username, role: user.role, district: user.district },
+                { 
+                    id: user.id, 
+                    username: user.username,
+                    full_name: user.full_name,
+                    district: user.district,
+                    role: user.role 
+                },
                 JWT_SECRET,
-                { expiresIn: '24h' }
+                { expiresIn: '7d' }
             );
             
-            // Set cookie
             res.cookie('token', token, {
                 httpOnly: true,
-                secure: !isDevelopment,
-                sameSite: 'strict',
-                maxAge: 24 * 60 * 60 * 1000
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: 7 * 24 * 60 * 60 * 1000
             });
             
             res.json({
@@ -195,304 +385,202 @@ app.post('/api/login', (req, res) => {
                 user: {
                     id: user.id,
                     username: user.username,
-                    email: user.email,
-                    role: user.role,
+                    full_name: user.full_name,
                     district: user.district,
-                    full_name: user.full_name
-                },
-                token
+                    role: user.role
+                }
             });
-        });
-    });
+        }
+    );
 });
 
-// Logout
 app.post('/api/logout', (req, res) => {
     res.clearCookie('token');
-    res.json({ success: true, message: 'Logged out successfully' });
+    res.json({ success: true });
 });
 
-// Get current user
-app.get('/api/me', (req, res) => {
-    const token = req.cookies.token;
-    if (!token) {
-        return res.status(401).json({ error: 'Not authenticated' });
-    }
-    
-    jwt.verify(token, JWT_SECRET, (err, decoded) => {
-        if (err) {
-            return res.status(401).json({ error: 'Invalid token' });
-        }
-        
-        const sql = 'SELECT id, username, email, role, district, full_name, created_at, last_login FROM users WHERE id = ?';
-        db.query(sql, [decoded.id], (err, users) => {
-            if (err) return res.status(500).json({ error: 'Database error' });
-            if (users.length === 0) return res.status(401).json({ error: 'User not found' });
-            res.json(users[0]);
-        });
-    });
-});
-
-// Get all users (admin only)
-app.get('/api/users', authenticateToken, authorizeRole('admin'), (req, res) => {
-    const sql = 'SELECT id, username, email, role, district, full_name, created_at, last_login FROM users';
-    db.query(sql, (err, users) => {
-        if (err) return res.status(500).json({ error: 'Database error' });
-        res.json(users);
-    });
-});
-
-// ============ DATA ENTRY ENDPOINTS ============
-
-// Add new water point
 app.post('/api/add-water-point', authenticateToken, (req, res) => {
     const { district, name, ta, type, status, latitude, longitude, officer_name, notes } = req.body;
     
-    if (!district || !name || !ta || !type || !status) {
-        return res.status(400).json({ error: 'Missing required fields' });
+    if (req.user.role !== 'admin' && req.user.district !== district) {
+        return res.status(403).json({ error: 'You can only add water points to your assigned district' });
     }
     
-    // Check if officer has permission for this district
-    if (req.user.role === 'officer' && req.user.district && req.user.district !== district) {
-        return res.status(403).json({ error: 'You can only add data for your district' });
-    }
+    const water_point_id = `WP_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     
-    // First check if the table exists
-    db.query(`SHOW TABLES LIKE '${district}'`, (err, tables) => {
-        if (err || tables.length === 0) {
-            return res.status(400).json({ error: 'Invalid district' });
-        }
-        
-        const sql = `
-            INSERT INTO \`${district}\` 
-            (Name, TA, Type, Functionality_Status, Latitude, Longitude, officer_name, notes, date_recorded)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
-        `;
-        
-        db.query(sql, [name, ta, type, status, latitude || null, longitude || null, officer_name || req.user.username, notes || null], (err, result) => {
+    db.query(
+        `INSERT INTO water_points 
+        (water_point_id, district, name, ta, type, status, latitude, longitude, officer_name, notes, created_at) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [water_point_id, district, name, ta, type, status, latitude, longitude, officer_name || req.user.username, notes],
+        (err, result) => {
             if (err) {
-                console.error('Insert error:', err);
-                return res.status(500).json({ error: 'Database error', details: err.message });
+                console.error('Error adding water point:', err);
+                return res.status(500).json({ error: 'Database error' });
             }
-            res.json({ success: true, message: 'Water point added successfully', id: result.insertId });
-        });
-    });
-});
-
-// Update water point status
-app.put('/api/update-water-point/:id', authenticateToken, (req, res) => {
-    const { id } = req.params;
-    const { district, status, notes } = req.body;
-    
-    if (!district || !status) {
-        return res.status(400).json({ error: 'Missing required fields' });
-    }
-    
-    // Check permission
-    if (req.user.role === 'officer' && req.user.district && req.user.district !== district) {
-        return res.status(403).json({ error: 'You can only update data for your district' });
-    }
-    
-    const sql = `UPDATE \`${district}\` SET Functionality_Status = ?, notes = ?, last_updated = NOW() WHERE id = ?`;
-    db.query(sql, [status, notes || null, id], (err, result) => {
-        if (err) return res.status(500).json({ error: 'Database error' });
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ error: 'Water point not found' });
+            res.json({ success: true, water_point_id });
         }
-        res.json({ success: true, message: 'Water point updated successfully' });
-    });
-});
-
-// Get alerts for low functionality
-app.get('/api/alerts', authenticateToken, (req, res) => {
-    let districts = [];
-    let districtFilter = '';
-    
-    if (req.user.role === 'officer' && req.user.district) {
-        districts = [req.user.district];
-    } else {
-        districts = [
-            "nsanje", "chikwawa", "blantyre", "chiradzulo", "thyolo",
-            "mulanje", "phalombe", "zomba", "machinga", "mangochi",
-            "balaka", "ntcheu", "dedza", "salima", "lilongwe",
-            "mchinji", "dowa", "ntchisi", "kasungu", "nkhotakota",
-            "nkhatabay", "mzimba", "karonga", "chitipa", "likoma"
-        ];
-    }
-    
-    const results = [];
-    let completed = 0;
-    
-    if (districts.length === 0) {
-        return res.json([]);
-    }
-    
-    districts.forEach(district => {
-        const sql = `
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN Functionality_Status IN ('Not functional', 'Partially functional but in need of repair') THEN 1 ELSE 0 END) as critical,
-                ROUND(SUM(CASE WHEN Functionality_Status IN ('Not functional', 'Partially functional but in need of repair') THEN 1 ELSE 0 END) / COUNT(*) * 100, 1) as critical_pct
-            FROM \`${district}\`
-        `;
-        
-        db.query(sql, (err, rows) => {
-            if (!err && rows.length > 0) {
-                results.push({
-                    district: district,
-                    total: rows[0].total,
-                    critical: rows[0].critical,
-                    critical_pct: rows[0].critical_pct
-                });
-            }
-            completed++;
-            if (completed === districts.length) {
-                // Filter districts with >20% non-functional/partial
-                const alerts = results.filter(r => r.critical_pct > 20);
-                res.json(alerts);
-            }
-        });
-    });
-});
-
-const ALLOWED_TABLES = [
-    "nsanje", "chikwawa", "blantyre", "chiradzulo", "thyolo",
-    "mulanje", "phalombe", "zomba", "machinga", "mangochi",
-    "balaka", "ntcheu", "dedza", "salima", "lilongwe",
-    "mchinji", "dowa", "ntchisi", "kasungu", "nkhotakota",
-    "nkhatabay", "mzimba", "karonga", "chitipa", "likoma"
-];
-
-const TABLES = [
-    "balaka", "blantyre", "chitipa", "dedza", "dowa",
-    "karonga", "kasungu", "likoma", "lilongwe", "machinga",
-    "mangochi", "mchinji", "mulanje", "mzimba", "nkhatabay",
-    "nkhotakota", "nsanje", "ntcheu", "ntchisi", "phalombe",
-    "salima", "zomba"
-];
-
-// Root endpoint - serve dashboard
-app.get("/", (req, res) => {
-    res.sendFile(__dirname + "/index.html");
-});
-
-// Public endpoints (no authentication required)
-app.get("/test-db", (req, res) => {
-    db.query("SELECT 1 + 1 AS result, NOW() AS server_time, DATABASE() AS current_database", (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true, data: results[0] });
-    });
-});
-
-app.get("/data", (req, res) => {
-    const table = req.query.table || "nsanje";
-    const TA = req.query.district;
-    const type = req.query.type;
-
-    if (!ALLOWED_TABLES.includes(table.toLowerCase())) {
-        return res.status(400).json({ error: "Invalid table" });
-    }
-
-    let sql = `SELECT \`Functionality_Status\` AS status, COUNT(*) AS total FROM \`${table}\``;
-    const params = [];
-    const conditions = [];
-
-    if (TA) {
-        conditions.push("`TA` = ?");
-        params.push(TA);
-    }
-
-    if (type) {
-        conditions.push("`Type` = ?");
-        params.push(type);
-    }
-
-    if (conditions.length > 0) {
-        sql += " WHERE " + conditions.join(" AND ");
-    }
-
-    sql += " GROUP BY `Functionality_Status`";
-
-    db.query(sql, params, (err, results) => {
-        if (err) return res.status(500).json(err);
-        res.json(results);
-    });
-});
-
-app.get("/districts", (req, res) => {
-    const table = req.query.table || "nsanje";
-
-    if (!ALLOWED_TABLES.includes(table.toLowerCase())) {
-        return res.status(400).json({ error: "Invalid table" });
-    }
-
-    db.query(`SELECT DISTINCT \`TA\` FROM \`${table}\` ORDER BY \`TA\``, (err, results) => {
-        if (err) return res.status(500).json(err);
-        res.json(results.map(r => r.TA));
-    });
-});
-
-app.get("/types", (req, res) => {
-    const table = req.query.table || "nsanje";
-
-    if (!ALLOWED_TABLES.includes(table.toLowerCase())) {
-        return res.status(400).json({ error: "Invalid table" });
-    }
-
-    db.query(`SELECT DISTINCT \`Type\` FROM \`${table}\` ORDER BY \`Type\``, (err, results) => {
-        if (err) return res.status(500).json(err);
-        res.json(results.map(r => r.Type));
-    });
-});
-
-app.get("/mapdata", (req, res) => {
-    const table = req.query.table || "nsanje";
-    const TA = req.query.district;
-    const type = req.query.type;
-
-    if (!ALLOWED_TABLES.includes(table.toLowerCase())) {
-        return res.status(400).json({ error: "Invalid table" });
-    }
-
-    let sql = `SELECT Name, Type, Latitude, Longitude, Functionality_Status AS status FROM \`${table}\` WHERE Latitude IS NOT NULL AND Longitude IS NOT NULL`;
-    const params = [];
-
-    if (TA) {
-        sql += " AND `TA` = ?";
-        params.push(TA);
-    }
-
-    if (type) {
-        sql += " AND `Type` = ?";
-        params.push(type);
-    }
-
-    db.query(sql, params, (err, results) => {
-        if (err) return res.status(500).json(err);
-        res.json(results);
-    });
-});
-
-app.get("/national", (req, res) => {
-    const queries = TABLES.map(table => 
-        `SELECT '${table}' AS district, 
-        COUNT(*) AS total,
-        SUM(CASE WHEN \`Functionality_Status\` = 'Functional' THEN 1 ELSE 0 END) AS functional,
-        SUM(CASE WHEN \`Functionality_Status\` = 'Not functional' THEN 1 ELSE 0 END) AS not_functional,
-        SUM(CASE WHEN \`Functionality_Status\` = 'Partially functional but in need of repair' THEN 1 ELSE 0 END) AS partial,
-        SUM(CASE WHEN \`Functionality_Status\` = 'No longer exists or abandoned' THEN 1 ELSE 0 END) AS abandoned
-        FROM \`${table}\``
     );
+});
 
-    const sql = queries.join(" UNION ALL ") + " ORDER BY district";
+// ============ DATA ENDPOINTS ============
 
-    db.query(sql, (err, results) => {
-        if (err) return res.status(500).json(err);
+app.get('/data', (req, res) => {
+    const { table, district, type } = req.query;
+    
+    let query = `
+        SELECT status, COUNT(*) as total 
+        FROM water_points 
+        WHERE district = ? 
+    `;
+    const params = [table];
+    
+    if (district && district !== '') {
+        query += ` AND ta = ?`;
+        params.push(district);
+    }
+    
+    if (type && type !== '') {
+        query += ` AND type = ?`;
+        params.push(type);
+    }
+    
+    query += ` GROUP BY status`;
+    
+    db.query(query, params, (err, results) => {
+        if (err) {
+            console.error('Data fetch error:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
         res.json(results);
     });
 });
 
-const PORT = process.env.PORT || 8080;
+app.get('/mapdata', (req, res) => {
+    const { table, district, type } = req.query;
+    
+    let query = `
+        SELECT water_point_id, name as Name, type as Type, status, latitude as Latitude, longitude as Longitude 
+        FROM water_points 
+        WHERE district = ? 
+    `;
+    const params = [table];
+    
+    if (district && district !== '') {
+        query += ` AND ta = ?`;
+        params.push(district);
+    }
+    
+    if (type && type !== '') {
+        query += ` AND type = ?`;
+        params.push(type);
+    }
+    
+    db.query(query, params, (err, results) => {
+        if (err) {
+            console.error('Map data fetch error:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(results);
+    });
+});
+
+app.get('/districts', (req, res) => {
+    const { table } = req.query;
+    db.query(
+        'SELECT DISTINCT ta FROM water_points WHERE district = ? AND ta IS NOT NULL AND ta != "" ORDER BY ta',
+        [table],
+        (err, results) => {
+            if (err) {
+                console.error('Districts fetch error:', err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            res.json(results.map(r => r.ta));
+        }
+    );
+});
+
+app.get('/types', (req, res) => {
+    const { table } = req.query;
+    db.query(
+        'SELECT DISTINCT type FROM water_points WHERE district = ? AND type IS NOT NULL AND type != "" ORDER BY type',
+        [table],
+        (err, results) => {
+            if (err) {
+                console.error('Types fetch error:', err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            res.json(results.map(r => r.type));
+        }
+    );
+});
+
+app.get('/national', (req, res) => {
+    db.query(`
+        SELECT 
+            district,
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'Functional' THEN 1 ELSE 0 END) as functional,
+            SUM(CASE WHEN status = 'Partially functional but in need of repair' THEN 1 ELSE 0 END) as partial,
+            SUM(CASE WHEN status = 'Not functional' THEN 1 ELSE 0 END) as not_functional,
+            SUM(CASE WHEN status = 'No longer exists or abandoned' THEN 1 ELSE 0 END) as abandoned
+        FROM water_points
+        GROUP BY district
+        ORDER BY district
+    `, (err, results) => {
+        if (err) {
+            console.error('National fetch error:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(results);
+    });
+});
+
+// ============ CRON JOB FOR DAILY SNAPSHOTS ============
+
+function recordDailySnapshot() {
+    const query = `
+        INSERT INTO historical_snapshots 
+        (district, snapshot_date, functional_count, partially_functional_count, not_functional_count, abandoned_count, total_count, functional_rate)
+        SELECT 
+            district,
+            CURDATE() as snapshot_date,
+            SUM(CASE WHEN status = 'Functional' THEN 1 ELSE 0 END) as functional_count,
+            SUM(CASE WHEN status = 'Partially functional but in need of repair' THEN 1 ELSE 0 END) as partially_functional_count,
+            SUM(CASE WHEN status = 'Not functional' THEN 1 ELSE 0 END) as not_functional_count,
+            SUM(CASE WHEN status = 'No longer exists or abandoned' THEN 1 ELSE 0 END) as abandoned_count,
+            COUNT(*) as total_count,
+            ROUND((SUM(CASE WHEN status = 'Functional' THEN 1 ELSE 0 END) / COUNT(*)) * 100, 2) as functional_rate
+        FROM water_points
+        GROUP BY district
+        ON DUPLICATE KEY UPDATE
+            functional_count = VALUES(functional_count),
+            partially_functional_count = VALUES(partially_functional_count),
+            not_functional_count = VALUES(not_functional_count),
+            abandoned_count = VALUES(abandoned_count),
+            total_count = VALUES(total_count),
+            functional_rate = VALUES(functional_rate)
+    `;
+    
+    db.query(query, (err) => {
+        if (err) console.error('Snapshot recording error:', err);
+        else console.log('Daily snapshot recorded at', new Date().toISOString());
+    });
+}
+
+// Record snapshot on server start
+setTimeout(() => {
+    recordDailySnapshot();
+}, 5000);
+
+// Schedule daily snapshot at midnight
+setInterval(() => {
+    const now = new Date();
+    if (now.getHours() === 0 && now.getMinutes() === 0) {
+        recordDailySnapshot();
+    }
+}, 60000); // Check every minute
+
 app.listen(PORT, () => {
-    console.log(`🚀 API running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
