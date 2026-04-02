@@ -25,7 +25,7 @@ const pool = mysql.createPool({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'malawi_water',
+    database: process.env.DB_NAME || 'railway',
     port: process.env.DB_PORT || 3306,
     waitForConnections: true,
     connectionLimit: 10,
@@ -75,7 +75,7 @@ app.get('/api/me', authenticateToken, (req, res) => {
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     executeQuery(
-        'SELECT * FROM users WHERE username = ? OR email = ?',  // Changed from officers to users
+        'SELECT * FROM users WHERE username = ? OR email = ?',
         [username, username],
         async (err, results) => {
             if (err || results.length === 0) {
@@ -251,7 +251,7 @@ app.get('/national', (req, res) => {
         }
         
         const districtTables = tables.map(t => Object.values(t)[0]).filter(t => 
-            !['officers', 'historical_snapshots', 'status_change_log'].includes(t)
+            !['users', 'historical_snapshots', 'status_change_log'].includes(t)
         );
         
         let completed = 0;
@@ -294,7 +294,7 @@ app.get('/api/test', (req, res) => {
             res.json({ error: err.message, hasData: false });
         } else {
             const districtTables = tables.map(t => Object.values(t)[0]).filter(t => 
-                !['officers', 'historical_snapshots', 'status_change_log'].includes(t)
+                !['users', 'historical_snapshots', 'status_change_log'].includes(t)
             );
             res.json({ 
                 hasData: districtTables.length > 0,
@@ -319,16 +319,7 @@ app.get('/api/debug-tables', (req, res) => {
         }
     });
 });
-// Check officers in database
-app.get('/api/list-officers', (req, res) => {
-    executeQuery("SELECT username, district, role, full_name FROM officers", [], (err, results) => {
-        if (err) {
-            res.json({ error: err.message });
-        } else {
-            res.json({ officers: results });
-        }
-    });
-});
+
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
