@@ -320,6 +320,12 @@ app.get('/api/debug-tables', (req, res) => {
     });
 });
 
+app.get('/api/debug-login', (req, res) => {
+    executeQuery("SELECT username, LEFT(password, 30) as password_prefix FROM users", [], (err, results) => {
+        res.json({ users: results, error: err?.message });
+    });
+});
+
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
