@@ -60,6 +60,10 @@ function switchTab(tab) {
     if (tab === "district") {
         document.querySelectorAll(".tab")[0].classList.add("active");
         document.getElementById("districtTab").classList.add("active");
+        // Check district alerts when switching to district tab
+        setTimeout(() => {
+            checkDistrictAlerts();
+        }, 500);
     } else {
         document.querySelectorAll(".tab")[1].classList.add("active");
         document.getElementById("nationalTab").classList.add("active");
@@ -84,7 +88,6 @@ function loadNational() {
             const notFunctional = data.map(d => Number(d.not_functional));
             const abandoned = data.map(d => Number(d.abandoned));
 
-            // National cards
             const grandTotal = totals.reduce((a, b) => a + b, 0);
             const grandFunctional = functional.reduce((a, b) => a + b, 0);
             const grandPartial = partial.reduce((a, b) => a + b, 0);
@@ -103,7 +106,6 @@ function loadNational() {
             document.getElementById("natCardAbandoned").textContent = grandAbandoned.toLocaleString();
             document.getElementById("natCardAbandonedPct").textContent = pct(grandAbandoned);
 
-            // National chart
             if (nationalChart) nationalChart.destroy();
             nationalChart = new Chart(nationalCtx, {
                 type: "bar",
@@ -135,7 +137,6 @@ function loadNational() {
                 }
             });
 
-            // National table
             const tableDiv = document.getElementById("nationalTableContainer");
             tableDiv.innerHTML = `
                 <h2>District Summary Table</h2>
@@ -174,6 +175,9 @@ function loadNational() {
                     </table>
                 </div>
             `;
+            
+            // Check district alerts after loading national data
+            checkDistrictAlerts();
         })
         .catch(err => console.error("National fetch error:", err));
 }
@@ -288,7 +292,6 @@ function loadMap(table = "nsanje", TA = "", type = "") {
 function renderCards(data) {
     const total = data.reduce((sum, d) => sum + Number(d.total), 0);
     
-    // Direct status matching (no keyword searching)
     let functional = 0;
     let partial = 0;
     let notFunctional = 0;
@@ -327,7 +330,7 @@ function loadDistricts(table) {
         .then(res => res.json())
         .then(districts => {
             const select = document.getElementById("districtSelect");
-            select.innerHTML = '<option value="">All TAs</option>';
+            select.innerHTML = '<option value="">All Traditional Authorities</option>';
             if (Array.isArray(districts)) {
                 districts.forEach(d => {
                     if (d) {
@@ -423,7 +426,6 @@ function fetchData(table = "nsanje", TA = "", type = "") {
             if (TA) title += ` — ${TA}`;
             if (type) title += ` — ${type}`;
 
-            // Bar Chart with figures
             if (barChart) barChart.destroy();
             barChart = new Chart(barCtx, {
                 type: "bar",
@@ -439,9 +441,10 @@ function fetchData(table = "nsanje", TA = "", type = "") {
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: true,
                     plugins: {
                         legend: { display: true, position: 'top' },
-                        title: { display: true, text: `Functionality Status — ${title}` },
+                        title: { display: true, text: `Functionality Status — ${title}`, font: { size: 14 } },
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
@@ -465,7 +468,6 @@ function fetchData(table = "nsanje", TA = "", type = "") {
                 }
             });
 
-            // Doughnut Chart with figures
             if (doughnutChart) doughnutChart.destroy();
             doughnutChart = new Chart(doughnutCtx, {
                 type: "doughnut",
@@ -479,10 +481,11 @@ function fetchData(table = "nsanje", TA = "", type = "") {
                     }] 
                 },
                 options: { 
-                    responsive: true, 
+                    responsive: true,
+                    maintainAspectRatio: true,
                     plugins: { 
                         legend: { display: true, position: "bottom" },
-                        title: { display: true, text: `Distribution — ${title}` },
+                        title: { display: true, text: `Distribution — ${title}`, font: { size: 14 } },
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
@@ -497,6 +500,13 @@ function fetchData(table = "nsanje", TA = "", type = "") {
             });
 
             renderTable(data, title);
+            
+            // After loading district data, check TA alerts
+            if (!TA || TA === "") {
+                setTimeout(() => {
+                    checkTAAlerts(table);
+                }, 500);
+            }
         })
         .catch(err => console.error("Fetch error:", err));
 }
@@ -559,6 +569,269 @@ function exportCSV(type) {
     link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
+}
+
+// ============ DISTRICT LEVEL ALERTS ============
+
+function checkDistrictAlerts() {
+    fetch(`${API_URL}/national`)
+        .then(res => res.json())
+        .then(districts => {
+            const alerts = [];
+            const criticalThreshold = 50;
+            const warningThreshold = 65;
+            
+            districts.forEach(district => {
+                const total = Number(district.total);
+                const functional = Number(district.functional);
+                const functionalRate = total > 0 ? (functional / total) * 100 : 0;
+                
+                if (functionalRate < criticalThreshold) {
+                    alerts.push({
+                        district: district.district,
+                        rate: functionalRate,
+                        level: 'critical',
+                        message: `🔴 CRITICAL: ${district.district.toUpperCase()} has only ${functionalRate.toFixed(1)}% functional water points!`
+                    });
+                } else if (functionalRate < warningThreshold) {
+                    alerts.push({
+                        district: district.district,
+                        rate: functionalRate,
+                        level: 'warning',
+                        message: `⚠️ WARNING: ${district.district.toUpperCase()} has ${functionalRate.toFixed(1)}% functional points. Needs attention.`
+                    });
+                }
+            });
+            
+            if (alerts.length > 0) {
+                showDistrictAlertsPanel(alerts);
+            } else {
+                hideDistrictAlertsPanel();
+            }
+        })
+        .catch(err => console.error("District alert check error:", err));
+}
+
+function showDistrictAlertsPanel(alerts) {
+    let alertsPanel = document.getElementById('districtAlertsPanel');
+    if (!alertsPanel) {
+        alertsPanel = document.createElement('div');
+        alertsPanel.id = 'districtAlertsPanel';
+        alertsPanel.className = 'alerts-panel';
+        
+        const tabs = document.querySelector('.tabs');
+        tabs.parentNode.insertBefore(alertsPanel, tabs.nextSibling);
+    }
+    
+    const criticalAlerts = alerts.filter(a => a.level === 'critical');
+    const warningAlerts = alerts.filter(a => a.level === 'warning');
+    
+    alertsPanel.innerHTML = `
+        <div class="alerts-header">
+            <span>🏘️ District Alerts</span>
+            <button onclick="closeDistrictAlertsPanel()" class="close-alerts">×</button>
+        </div>
+        <div class="alerts-container">
+            ${criticalAlerts.length > 0 ? `
+                <div class="alert-section critical">
+                    <h4>🔴 Critical - Immediate Action Required</h4>
+                    ${criticalAlerts.map(alert => `
+                        <div class="alert-item critical" onclick="switchToDistrict('${alert.district}')">
+                            <span class="alert-icon">🔴</span>
+                            <span class="alert-message">${alert.message}</span>
+                            <span class="alert-rate">${alert.rate.toFixed(1)}%</span>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+            ${warningAlerts.length > 0 ? `
+                <div class="alert-section warning">
+                    <h4>⚠️ Warning - Needs Monitoring</h4>
+                    ${warningAlerts.map(alert => `
+                        <div class="alert-item warning" onclick="switchToDistrict('${alert.district}')">
+                            <span class="alert-icon">⚠️</span>
+                            <span class="alert-message">${alert.message}</span>
+                            <span class="alert-rate">${alert.rate.toFixed(1)}%</span>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    alertsPanel.style.display = 'block';
+}
+
+function hideDistrictAlertsPanel() {
+    const alertsPanel = document.getElementById('districtAlertsPanel');
+    if (alertsPanel) {
+        alertsPanel.style.display = 'none';
+    }
+}
+
+function closeDistrictAlertsPanel() {
+    const alertsPanel = document.getElementById('districtAlertsPanel');
+    if (alertsPanel) {
+        alertsPanel.style.display = 'none';
+    }
+}
+
+function switchToDistrict(district) {
+    switchTab('district');
+    const districtSelect = document.getElementById('tableSelect');
+    if (districtSelect) {
+        districtSelect.value = district.toLowerCase();
+        const event = new Event('change');
+        districtSelect.dispatchEvent(event);
+    }
+    closeDistrictAlertsPanel();
+    document.getElementById('map').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ============ TA LEVEL ALERTS ============
+
+let currentDistrictForTA = null;
+
+function checkTAAlerts(district) {
+    currentDistrictForTA = district;
+    
+    fetch(`${API_URL}/districts?table=${district}`)
+        .then(res => res.json())
+        .then(tas => {
+            if (!tas || tas.length === 0) {
+                hideTAAlertsPanel();
+                return;
+            }
+            
+            const alerts = [];
+            const criticalThreshold = 50;
+            const warningThreshold = 65;
+            let completed = 0;
+            
+            tas.forEach(ta => {
+                fetch(`${API_URL}/data?table=${district}&district=${encodeURIComponent(ta)}`)
+                    .then(res => res.json())
+                    .then(taData => {
+                        const total = taData.reduce((sum, d) => sum + Number(d.total), 0);
+                        const functional = taData.find(d => d.status === 'Functional')?.total || 0;
+                        const functionalRate = total > 0 ? (functional / total) * 100 : 100;
+                        
+                        if (functionalRate < criticalThreshold) {
+                            alerts.push({
+                                ta: ta,
+                                rate: functionalRate,
+                                level: 'critical',
+                                message: `🔴 CRITICAL: ${ta} has only ${functionalRate.toFixed(1)}% functional water points!`
+                            });
+                        } else if (functionalRate < warningThreshold) {
+                            alerts.push({
+                                ta: ta,
+                                rate: functionalRate,
+                                level: 'warning',
+                                message: `⚠️ WARNING: ${ta} has ${functionalRate.toFixed(1)}% functional points.`
+                            });
+                        }
+                        
+                        completed++;
+                        if (completed === tas.length) {
+                            if (alerts.length > 0) {
+                                showTAAlertsPanel(alerts, district);
+                            } else {
+                                hideTAAlertsPanel();
+                            }
+                        }
+                    })
+                    .catch(err => {
+                        console.error("TA data fetch error:", err);
+                        completed++;
+                        if (completed === tas.length && alerts.length === 0) {
+                            hideTAAlertsPanel();
+                        }
+                    });
+            });
+            
+            if (tas.length === 0) {
+                hideTAAlertsPanel();
+            }
+        })
+        .catch(err => console.error("TA alert check error:", err));
+}
+
+function showTAAlertsPanel(alerts, district) {
+    let alertsPanel = document.getElementById('taAlertsPanel');
+    if (!alertsPanel) {
+        alertsPanel = document.createElement('div');
+        alertsPanel.id = 'taAlertsPanel';
+        alertsPanel.className = 'alerts-panel ta-alerts';
+        
+        const mapContainer = document.querySelector('.map-container');
+        mapContainer.parentNode.insertBefore(alertsPanel, mapContainer);
+    }
+    
+    const criticalAlerts = alerts.filter(a => a.level === 'critical');
+    const warningAlerts = alerts.filter(a => a.level === 'warning');
+    
+    alertsPanel.innerHTML = `
+        <div class="alerts-header">
+            <span>📍 TA Alerts - ${district.toUpperCase()}</span>
+            <button onclick="closeTAAlertsPanel()" class="close-alerts">×</button>
+        </div>
+        <div class="alerts-container">
+            ${criticalAlerts.length > 0 ? `
+                <div class="alert-section critical">
+                    <h4>🔴 Critical TAs - Immediate Action</h4>
+                    ${criticalAlerts.map(alert => `
+                        <div class="alert-item critical" onclick="filterByTA('${alert.ta}')">
+                            <span class="alert-icon">🔴</span>
+                            <span class="alert-message">${alert.message}</span>
+                            <span class="alert-rate">${alert.rate.toFixed(1)}%</span>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+            ${warningAlerts.length > 0 ? `
+                <div class="alert-section warning">
+                    <h4>⚠️ Warning TAs - Monitor</h4>
+                    ${warningAlerts.map(alert => `
+                        <div class="alert-item warning" onclick="filterByTA('${alert.ta}')">
+                            <span class="alert-icon">⚠️</span>
+                            <span class="alert-message">${alert.message}</span>
+                            <span class="alert-rate">${alert.rate.toFixed(1)}%</span>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    alertsPanel.style.display = 'block';
+}
+
+function hideTAAlertsPanel() {
+    const alertsPanel = document.getElementById('taAlertsPanel');
+    if (alertsPanel) {
+        alertsPanel.style.display = 'none';
+    }
+}
+
+function closeTAAlertsPanel() {
+    const alertsPanel = document.getElementById('taAlertsPanel');
+    if (alertsPanel) {
+        alertsPanel.style.display = 'none';
+    }
+}
+
+function filterByTA(ta) {
+    const districtSelect = document.getElementById('districtSelect');
+    if (districtSelect) {
+        districtSelect.value = ta;
+        const event = new Event('change');
+        districtSelect.dispatchEvent(event);
+    }
+    closeTAAlertsPanel();
+    
+    // Show toast notification
+    showToast(`Showing data for ${ta}`, 'success');
 }
 
 // ============ AUTHENTICATION & DATA ENTRY ============
@@ -765,3 +1038,8 @@ loadDistricts(initialTable);
 loadTypes(initialTable);
 fetchData(initialTable);
 loadMap(initialTable);
+
+// Check for district alerts on page load
+setTimeout(() => {
+    checkDistrictAlerts();
+}, 2000);

@@ -325,6 +325,19 @@ app.get('/api/debug-login', (req, res) => {
         res.json({ users: results, error: err?.message });
     });
 });
+// Debug endpoint to check users
+app.get('/api/debug-users', (req, res) => {
+    executeQuery("SELECT id, username, district, role, LEFT(password, 20) as password_prefix FROM users", [], (err, results) => {
+        if (err) {
+            res.json({ error: err.message });
+        } else {
+            res.json({ 
+                users: results,
+                count: results.length
+            });
+        }
+    });
+});
 
 // Start server
 app.listen(PORT, () => {
