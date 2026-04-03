@@ -29,7 +29,9 @@ const pool = mysql.createPool({
     port: process.env.DB_PORT || 3306,
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0
+    queueLimit: 0,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0
 });
 
 function executeQuery(query, params, callback) {
@@ -49,8 +51,35 @@ pool.getConnection((err, connection) => {
     } else {
         console.log('Connected to MySQL database');
         connection.release();
+        initializeDatabase();
     }
 });
+
+// Initialize database tables
+function initializeDatabase() {
+    // Create historical_snapshots table for trends
+    const createHistoricalTable = `
+        CREATE TABLE IF NOT EXISTS historical_snapshots (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            district VARCHAR(100),
+            snapshot_date DATE,
+            functional_count INT DEFAULT 0,
+            partially_functional_count INT DEFAULT 0,
+            not_functional_count INT DEFAULT 0,
+            abandoned_count INT DEFAULT 0,
+            total_count INT DEFAULT 0,
+            functional_rate DECIMAL(5,2),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_district_date (district, snapshot_date),
+            INDEX idx_district_date (district, snapshot_date)
+        )
+    `;
+    
+    executeQuery(createHistoricalTable, [], (err) => {
+        if (err) console.error('Error creating historical table:', err);
+        else console.log('Historical snapshots table ready');
+    });
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
 
@@ -286,7 +315,173 @@ app.get('/national', (req, res) => {
     });
 });
 
-// ============ TEST & DEBUG ENDPOINTS ============
+// ============ TREND ANALYSIS ENDPOINTS ============
+
+// Get historical trends for a district
+app.get('/api/trends', (req, res) => {
+    const { district, period = '6months' } = req.query;
+    
+    let startDate;
+    const now = new Date();
+    switch(period) {
+        case '3months':
+            startDate = new Date(now.setMonth(now.getMonth() - 3)).toISOString().split('T')[0];
+            break;
+        case '6months':
+            startDate = new Date(now.setMonth(now.getMonth() - 6)).toISOString().split('T')[0];
+            break;
+        case '1year':
+            startDate = new Date(now.setFullYear(now.getFullYear() - 1)).toISOString().split('T')[0];
+            break;
+        default:
+            startDate = new Date(now.setMonth(now.getMonth() - 6)).toISOString().split('T')[0];
+    }
+    
+    const query = `
+        SELECT 
+            snapshot_date as date,
+            functional_count,
+            partially_functional_count,
+            not_functional_count,
+            abandoned_count,
+            total_count,
+            functional_rate
+        FROM historical_snapshots
+        WHERE district = ?
+        AND snapshot_date >= ?
+        ORDER BY snapshot_date ASC
+    `;
+    
+    executeQuery(query, [district, startDate], (err, results) => {
+        if (err) {
+            console.error('Trends fetch error:', err);
+            return res.status(500).json({ error: err.message });
+        }
+        
+        if (!results || results.length === 0) {
+            const currentQuery = `
+                SELECT 
+                    COUNT(*) as total_count,
+                    SUM(CASE WHEN Functionality_Status = 'Functional' THEN 1 ELSE 0 END) as functional_count,
+                    SUM(CASE WHEN Functionality_Status = 'Partially functional but in need of repair' THEN 1 ELSE 0 END) as partially_functional_count,
+                    SUM(CASE WHEN Functionality_Status = 'Not functional' THEN 1 ELSE 0 END) as not_functional_count,
+                    SUM(CASE WHEN Functionality_Status = 'No longer exists or abandoned' THEN 1 ELSE 0 END) as abandoned_count
+                FROM ${district}
+            `;
+            
+            executeQuery(currentQuery, [], (err2, currentData) => {
+                if (err2 || !currentData || currentData.length === 0) {
+                    return res.json([]);
+                }
+                
+                const total = currentData[0].total_count || 0;
+                const functional = currentData[0].functional_count || 0;
+                const functionalRate = total > 0 ? (functional / total) * 100 : 0;
+                
+                res.json([{
+                    date: new Date().toISOString().split('T')[0],
+                    functional_count: functional,
+                    partially_functional_count: currentData[0].partially_functional_count || 0,
+                    not_functional_count: currentData[0].not_functional_count || 0,
+                    abandoned_count: currentData[0].abandoned_count || 0,
+                    total_count: total,
+                    functional_rate: functionalRate
+                }]);
+            });
+        } else {
+            res.json(results);
+        }
+    });
+});
+
+// Get monthly summary for a district
+app.get('/api/monthly-summary', (req, res) => {
+    const { district } = req.query;
+    
+    const query = `
+        SELECT 
+            DATE_FORMAT(snapshot_date, '%Y-%m') as month,
+            AVG(functional_rate) as avg_functional_rate,
+            SUM(total_count) as total_points,
+            SUM(functional_count) as total_functional,
+            SUM(partially_functional_count) as total_partial,
+            SUM(not_functional_count) as total_not_functional,
+            MAX(snapshot_date) as latest_date
+        FROM historical_snapshots
+        WHERE district = ?
+        AND snapshot_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+        GROUP BY DATE_FORMAT(snapshot_date, '%Y-%m')
+        ORDER BY month DESC
+        LIMIT 6
+    `;
+    
+    executeQuery(query, [district], (err, results) => {
+        if (err) {
+            console.error('Monthly summary error:', err);
+            return res.status(500).json({ error: err.message });
+        }
+        
+        res.json(results || []);
+    });
+});
+
+// Record a snapshot of current data
+app.get('/api/record-snapshot', (req, res) => {
+    executeQuery("SHOW TABLES", [], (err, tables) => {
+        if (err) {
+            return res.json({ error: err.message });
+        }
+        
+        const districtTables = tables.map(t => Object.values(t)[0]).filter(t => 
+            !['users', 'historical_snapshots', 'status_change_log'].includes(t)
+        );
+        
+        let completed = 0;
+        let errors = [];
+        
+        if (districtTables.length === 0) {
+            return res.json({ message: "No district tables found", success: false });
+        }
+        
+        districtTables.forEach(tableName => {
+            const query = `
+                INSERT INTO historical_snapshots 
+                (district, snapshot_date, functional_count, partially_functional_count, not_functional_count, abandoned_count, total_count, functional_rate)
+                VALUES (
+                    '${tableName}',
+                    CURDATE(),
+                    (SELECT COUNT(*) FROM ${tableName} WHERE Functionality_Status = 'Functional'),
+                    (SELECT COUNT(*) FROM ${tableName} WHERE Functionality_Status = 'Partially functional but in need of repair'),
+                    (SELECT COUNT(*) FROM ${tableName} WHERE Functionality_Status = 'Not functional'),
+                    (SELECT COUNT(*) FROM ${tableName} WHERE Functionality_Status = 'No longer exists or abandoned'),
+                    (SELECT COUNT(*) FROM ${tableName}),
+                    ROUND((SELECT COUNT(*) FROM ${tableName} WHERE Functionality_Status = 'Functional') / NULLIF((SELECT COUNT(*) FROM ${tableName}), 0) * 100, 2)
+                )
+                ON DUPLICATE KEY UPDATE
+                    functional_count = VALUES(functional_count),
+                    partially_functional_count = VALUES(partially_functional_count),
+                    not_functional_count = VALUES(not_functional_count),
+                    abandoned_count = VALUES(abandoned_count),
+                    total_count = VALUES(total_count),
+                    functional_rate = VALUES(functional_rate)
+            `;
+            
+            executeQuery(query, [], (err2) => {
+                if (err2) errors.push(`${tableName}: ${err2.message}`);
+                completed++;
+                if (completed === districtTables.length) {
+                    res.json({ 
+                        success: errors.length === 0, 
+                        message: `Snapshots recorded for ${districtTables.length} districts`,
+                        errors: errors
+                    });
+                }
+            });
+        });
+    });
+});
+
+// ============ TEST ENDPOINTS ============
 
 app.get('/api/test', (req, res) => {
     executeQuery("SHOW TABLES", [], (err, tables) => {
@@ -315,25 +510,6 @@ app.get('/api/debug-tables', (req, res) => {
                 tables: tables,
                 count: tables.length,
                 database: process.env.DB_NAME
-            });
-        }
-    });
-});
-
-app.get('/api/debug-login', (req, res) => {
-    executeQuery("SELECT username, LEFT(password, 30) as password_prefix FROM users", [], (err, results) => {
-        res.json({ users: results, error: err?.message });
-    });
-});
-// Debug endpoint to check users
-app.get('/api/debug-users', (req, res) => {
-    executeQuery("SELECT id, username, district, role, LEFT(password, 20) as password_prefix FROM users", [], (err, results) => {
-        if (err) {
-            res.json({ error: err.message });
-        } else {
-            res.json({ 
-                users: results,
-                count: results.length
             });
         }
     });
