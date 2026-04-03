@@ -482,6 +482,92 @@
             border-radius: 6px;
         }
 
+        /* Trends Section Styles */
+        .trends-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .trends-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .trends-header h2 {
+            color: #1e3c2c;
+            margin: 0;
+        }
+
+        .trend-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .trend-metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .metric-card {
+            background: #f9fafb;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            border-left: 4px solid #16a34a;
+        }
+
+        .metric-card.improving { border-left-color: #16a34a; }
+        .metric-card.declining { border-left-color: #dc2626; }
+        .metric-card.stable { border-left-color: #d97706; }
+
+        .metric-card h4 {
+            font-size: 0.8rem;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #1e3c2c;
+        }
+
+        .metric-value.positive { color: #16a34a; }
+        .metric-value.negative { color: #dc2626; }
+
+        .metric-label {
+            font-size: 0.7rem;
+            color: #6b7280;
+            margin-top: 5px;
+        }
+
+        .monthly-summary h3 {
+            margin-bottom: 15px;
+            color: #1e3c2c;
+        }
+
+        .summary-table {
+            width: 100%;
+            font-size: 0.85rem;
+        }
+
+        .summary-table th {
+            background: #f3f4f6;
+            padding: 10px;
+        }
+
+        .rate-cell.good { color: #16a34a; font-weight: bold; }
+        .rate-cell.warning { color: #d97706; font-weight: bold; }
+        .rate-cell.bad { color: #dc2626; font-weight: bold; }
+
         .loading, .info {
             text-align: center;
             padding: 30px;
@@ -528,6 +614,19 @@
             #map {
                 height: 300px;
             }
+
+            .trends-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .trend-controls {
+                flex-direction: column;
+            }
+
+            .trend-metrics-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
     </style>
 </head>
@@ -569,6 +668,7 @@
             <div class="sub-tabs">
                 <button class="sub-tab active" onclick="switchSubTab('district', 'dashboard')">📊 Dashboard</button>
                 <button class="sub-tab" onclick="switchSubTab('district', 'ta-alerts')">📍 TA Alerts</button>
+                <button class="sub-tab" onclick="switchSubTab('district', 'trends')">📈 Trends</button>
             </div>
             
             <!-- District Dashboard -->
@@ -609,6 +709,39 @@
                     <h2>📍 Traditional Authority Alerts</h2>
                     <p class="alert-description">Showing TA alerts for: <strong id="selectedDistrictName">Nsanje</strong> District</p>
                     <div id="taAlertsList" class="alerts-list"><div class="loading">Loading TA alerts...</div></div>
+                </div>
+            </div>
+
+            <!-- Trends -->
+            <div id="districtTrends" class="sub-content">
+                <div class="trends-container">
+                    <div class="trends-header">
+                        <h2>📈 Historical Trend Analysis</h2>
+                        <div class="trend-controls">
+                            <select id="trendPeriod" onchange="loadTrendData()">
+                                <option value="3months">Last 3 Months</option>
+                                <option value="6months" selected>Last 6 Months</option>
+                                <option value="1year">Last Year</option>
+                            </select>
+                            <button class="export-btn" onclick="exportTrendReport()">📊 Export Report</button>
+                        </div>
+                    </div>
+                    
+                    <div class="trend-metrics-grid" id="trendMetrics">
+                        <div class="metric-card"><h4>Overall Trend</h4><div class="metric-value" id="trendChange">--</div><div class="metric-label" id="trendDirection">Loading...</div></div>
+                        <div class="metric-card"><h4>Current Rate</h4><div class="metric-value" id="currentRate">--</div><div class="metric-label">Functional</div></div>
+                        <div class="metric-card"><h4>Best Month</h4><div class="metric-value" id="bestMonth">--</div><div class="metric-label" id="bestRate">--</div></div>
+                        <div class="metric-card"><h4>Worst Month</h4><div class="metric-value" id="worstMonth">--</div><div class="metric-label" id="worstRate">--</div></div>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                    
+                    <div class="table-container" id="monthlySummaryContainer">
+                        <h3>Monthly Performance Summary</h3>
+                        <div id="monthlySummaryTable">Loading...</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -673,11 +806,11 @@
             <h2>📝 Add New Water Point</h2>
             <form id="dataEntryForm">
                 <div class="form-grid">
-                    <div class="form-group"><label>District *</label><select id="entryDistrict" required>...</select></div>
+                    <div class="form-group"><label>District *</label><select id="entryDistrict" required><option value="">Select District</option><option value="nsanje">Nsanje</option><option value="blantyre">Blantyre</option><option value="lilongwe">Lilongwe</option><option value="zomba">Zomba</option></select></div>
                     <div class="form-group"><label>Water Point Name *</label><input type="text" id="entryName" required></div>
                     <div class="form-group"><label>Traditional Authority *</label><input type="text" id="entryTA" required></div>
-                    <div class="form-group"><label>Type *</label><select id="entryType" required>...</select></div>
-                    <div class="form-group"><label>Status *</label><select id="entryStatus" required>...</select></div>
+                    <div class="form-group"><label>Type *</label><select id="entryType" required><option value="Borehole">Borehole</option><option value="Well">Well</option><option value="Tap Stand">Tap Stand</option></select></div>
+                    <div class="form-group"><label>Status *</label><select id="entryStatus" required><option value="Functional">Functional</option><option value="Not functional">Not Functional</option><option value="Partially functional but in need of repair">Partially Functional</option><option value="No longer exists or abandoned">Abandoned</option></select></div>
                     <div class="form-group"><label>Latitude</label><input type="number" step="any" id="entryLat"></div>
                     <div class="form-group"><label>Longitude</label><input type="number" step="any" id="entryLng"></div>
                     <div class="form-group"><label>Your Name</label><input type="text" id="entryOfficer"></div>

@@ -2,7 +2,7 @@ const barCtx = document.getElementById("barChart").getContext("2d");
 const doughnutCtx = document.getElementById("doughnutChart").getContext("2d");
 const API_URL = 'https://malawi-water-dashboard.up.railway.app';
 
-let barChart, doughnutChart, nationalChart, map, markersLayer;
+let barChart, doughnutChart, nationalChart, trendChart, map, markersLayer;
 let nationalLoaded = false;
 let currentOfficer = null;
 
@@ -55,10 +55,14 @@ function switchSubTab(mainTab, subTab) {
             document.querySelectorAll("#districtMain .sub-tab")[0].classList.add("active");
             document.getElementById("districtDashboard").classList.add("active");
             if (map) setTimeout(() => map.invalidateSize(), 100);
-        } else {
+        } else if (subTab === 'ta-alerts') {
             document.querySelectorAll("#districtMain .sub-tab")[1].classList.add("active");
             document.getElementById("districtTAAlerts").classList.add("active");
             loadTAAlerts();
+        } else if (subTab === 'trends') {
+            document.querySelectorAll("#districtMain .sub-tab")[2].classList.add("active");
+            document.getElementById("districtTrends").classList.add("active");
+            loadTrendData();
         }
     } else {
         document.querySelectorAll("#nationalMain .sub-tab").forEach(t => t.classList.remove("active"));
@@ -75,6 +79,147 @@ function switchSubTab(mainTab, subTab) {
     }
 }
 
+// ============ TREND ANALYSIS FUNCTIONS ============
+function loadTrendData() {
+    const district = document.getElementById('tableSelect').value;
+    const period = document.getElementById('trendPeriod').value;
+    
+    fetch(`${API_URL}/api/trends?district=${district}&period=${period}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.length > 0) {
+                displayTrendChart(data, district);
+                calculateTrendMetrics(data);
+                displayMonthlySummary(data);
+            } else {
+                document.getElementById('trendMetrics').innerHTML = '<div class="metric-card">No trend data available yet. Daily snapshots will be recorded.</div>';
+                document.getElementById('monthlySummaryTable').innerHTML = '<div class="info">No historical data available</div>';
+            }
+        })
+        .catch(err => {
+            console.error('Trend data error:', err);
+            document.getElementById('trendMetrics').innerHTML = '<div class="metric-card">Error loading trend data</div>';
+        });
+}
+
+function displayTrendChart(data, district) {
+    const canvas = document.getElementById('trendChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    const dates = data.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }));
+    const functionalRate = data.map(d => parseFloat(d.functional_rate) || 0);
+    const functionalCount = data.map(d => d.functional_count || 0);
+    const totalCount = data.map(d => d.total_count || 0);
+    
+    if (trendChart) trendChart.destroy();
+    
+    trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: dates,
+            datasets: [
+                { label: 'Functional Rate (%)', data: functionalRate, borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,0.1)', borderWidth: 3, tension: 0.4, fill: true, yAxisID: 'y', pointRadius: 4 },
+                { label: 'Functional Points', data: functionalCount, borderColor: '#2563eb', borderWidth: 2, tension: 0.4, fill: false, yAxisID: 'y1', pointRadius: 3 },
+                { label: 'Total Points', data: totalCount, borderColor: '#6b7280', borderWidth: 2, tension: 0.4, fill: false, yAxisID: 'y1', pointRadius: 3, borderDash: [5, 5] }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: true,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                title: { display: true, text: `📈 Water Point Functionality Trends - ${district.toUpperCase()} District`, font: { size: 14, weight: 'bold' } },
+                tooltip: { callbacks: { label: (ctx) => ctx.dataset.label.includes('Rate') ? `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}%` : `${ctx.dataset.label}: ${ctx.raw.toLocaleString()}` } }
+            },
+            scales: {
+                y: { beginAtZero: true, max: 100, title: { display: true, text: 'Functional Rate (%)' }, ticks: { callback: (v) => v + '%' } },
+                y1: { position: 'right', title: { display: true, text: 'Number of Water Points' }, grid: { drawOnChartArea: false } }
+            }
+        }
+    });
+}
+
+function calculateTrendMetrics(data) {
+    if (!data || data.length < 2) return;
+    
+    const firstRate = data[0].functional_rate;
+    const lastRate = data[data.length - 1].functional_rate;
+    const change = lastRate - firstRate;
+    const trend = change > 0 ? 'improving' : change < 0 ? 'declining' : 'stable';
+    
+    const rates = data.map(d => d.functional_rate);
+    const bestRate = Math.max(...rates);
+    const worstRate = Math.min(...rates);
+    const bestIndex = rates.indexOf(bestRate);
+    const worstIndex = rates.indexOf(worstRate);
+    const bestMonth = data[bestIndex].date;
+    const worstMonth = data[worstIndex].date;
+    
+    const totalPoints = data[data.length - 1].total_count;
+    const functionalPoints = data[data.length - 1].functional_count;
+    
+    document.getElementById('trendChange').innerHTML = `${change > 0 ? '+' : ''}${change.toFixed(1)}%`;
+    document.getElementById('trendDirection').innerHTML = trend.toUpperCase();
+    document.getElementById('currentRate').innerHTML = `${lastRate.toFixed(1)}%`;
+    document.getElementById('bestMonth').innerHTML = new Date(bestMonth).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    document.getElementById('bestRate').innerHTML = `${bestRate.toFixed(1)}% functional`;
+    document.getElementById('worstMonth').innerHTML = new Date(worstMonth).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    document.getElementById('worstRate').innerHTML = `${worstRate.toFixed(1)}% functional`;
+    
+    const trendCard = document.querySelector('#trendMetrics .metric-card:first-child');
+    trendCard.classList.add(trend);
+    const trendValue = document.getElementById('trendChange');
+    if (change > 0) trendValue.classList.add('positive');
+    else if (change < 0) trendValue.classList.add('negative');
+}
+
+function displayMonthlySummary(data) {
+    const summaryHTML = `
+        <table class="summary-table">
+            <thead><tr><th>Month</th><th>Avg. Functional Rate</th><th>Total Points</th><th>Functional</th><th>Partial</th><th>Not Functional</th></tr></thead>
+            <tbody>
+                ${data.slice(0,6).map(month => `
+                    <tr>
+                        <td>${month.month || new Date(month.date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</td>
+                        <td class="rate-cell ${month.functional_rate >= 70 ? 'good' : month.functional_rate >= 50 ? 'warning' : 'bad'}">${month.functional_rate?.toFixed(1) || '0'}%</td>
+                        <td>${month.total_count?.toLocaleString() || '0'}</td>
+                        <td>${month.functional_count?.toLocaleString() || '0'}</td>
+                        <td>${month.partially_functional_count?.toLocaleString() || '0'}</td>
+                        <td>${month.not_functional_count?.toLocaleString() || '0'}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+    document.getElementById('monthlySummaryTable').innerHTML = summaryHTML;
+}
+
+function exportTrendReport() {
+    const district = document.getElementById('tableSelect').value;
+    const period = document.getElementById('trendPeriod').value;
+    
+    fetch(`${API_URL}/api/trends?district=${district}&period=${period}`)
+        .then(res => res.json())
+        .then(data => {
+            let report = `Malawi Water Points - Trend Report\n`;
+            report += `District: ${district.toUpperCase()}\n`;
+            report += `Period: ${period}\n`;
+            report += `Generated: ${new Date().toLocaleString()}\n`;
+            report += `${'='.repeat(50)}\n\n`;
+            report += `Date,Functional Rate,Functional Points,Total Points\n`;
+            data.forEach(d => {
+                report += `${d.date},${d.functional_rate?.toFixed(1) || '0'}%,${d.functional_count || 0},${d.total_count || 0}\n`;
+            });
+            const blob = new Blob([report], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${district}_trend_report.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+}
+
 // ============ ALERTS FUNCTIONS ============
 function loadDistrictAlerts() {
     fetch(`${API_URL}/national`)
@@ -85,13 +230,7 @@ function loadDistrictAlerts() {
                 const total = Number(district.total);
                 const functional = Number(district.functional);
                 const rate = total > 0 ? (functional / total) * 100 : 100;
-                alerts.push({
-                    district: district.district,
-                    total: total,
-                    functional: functional,
-                    rate: rate,
-                    level: rate < 50 ? 'critical' : (rate < 65 ? 'warning' : 'success')
-                });
+                alerts.push({ district: district.district, total, functional, rate, level: rate < 50 ? 'critical' : (rate < 65 ? 'warning' : 'success') });
             });
             alerts.sort((a, b) => a.rate - b.rate);
             displayDistrictAlerts(alerts);
@@ -102,18 +241,10 @@ function loadDistrictAlerts() {
 function displayDistrictAlerts(alerts) {
     const container = document.getElementById('districtAlertsList');
     if (!container) return;
-    
-    if (alerts.length === 0) {
-        container.innerHTML = '<div class="info">No district data available</div>';
-        return;
-    }
-    
+    if (alerts.length === 0) { container.innerHTML = '<div class="info">No district data available</div>'; return; }
     container.innerHTML = alerts.map(alert => `
         <div class="alert-card ${alert.level}" onclick="goToDistrict('${alert.district}')">
-            <div class="alert-info">
-                <div class="alert-title ${alert.level}">${alert.district.toUpperCase()}</div>
-                <div class="alert-stats">Total: ${alert.total.toLocaleString()} | Functional: ${alert.functional.toLocaleString()}</div>
-            </div>
+            <div class="alert-info"><div class="alert-title ${alert.level}">${alert.district.toUpperCase()}</div><div class="alert-stats">Total: ${alert.total.toLocaleString()} | Functional: ${alert.functional.toLocaleString()}</div></div>
             <div class="alert-rate ${alert.level}">${alert.rate.toFixed(1)}%</div>
         </div>
     `).join('');
@@ -129,14 +260,8 @@ function loadTAAlerts() {
     fetch(`${API_URL}/districts?table=${district}`)
         .then(res => res.json())
         .then(tas => {
-            if (!tas || tas.length === 0) {
-                container.innerHTML = '<div class="info">No Traditional Authorities found</div>';
-                return;
-            }
-            
-            const alerts = [];
-            let completed = 0;
-            
+            if (!tas || tas.length === 0) { container.innerHTML = '<div class="info">No Traditional Authorities found</div>'; return; }
+            const alerts = []; let completed = 0;
             tas.forEach(ta => {
                 fetch(`${API_URL}/data?table=${district}&district=${encodeURIComponent(ta)}`)
                     .then(res => res.json())
@@ -146,10 +271,7 @@ function loadTAAlerts() {
                         const rate = total > 0 ? (functional / total) * 100 : 100;
                         alerts.push({ ta, total, functional, rate, level: rate < 50 ? 'critical' : (rate < 65 ? 'warning' : 'success') });
                         completed++;
-                        if (completed === tas.length) {
-                            alerts.sort((a, b) => a.rate - b.rate);
-                            displayTAAlerts(alerts, district);
-                        }
+                        if (completed === tas.length) { alerts.sort((a, b) => a.rate - b.rate); displayTAAlerts(alerts, district); }
                     });
             });
         })
@@ -159,18 +281,10 @@ function loadTAAlerts() {
 function displayTAAlerts(alerts, district) {
     const container = document.getElementById('taAlertsList');
     if (!container) return;
-    
-    if (alerts.length === 0) {
-        container.innerHTML = '<div class="info">No TA data available</div>';
-        return;
-    }
-    
+    if (alerts.length === 0) { container.innerHTML = '<div class="info">No TA data available</div>'; return; }
     container.innerHTML = alerts.map(alert => `
         <div class="alert-card ${alert.level}" onclick="filterByTA('${district}', '${alert.ta}')">
-            <div class="alert-info">
-                <div class="alert-title ${alert.level}">${alert.ta}</div>
-                <div class="alert-stats">Total: ${alert.total.toLocaleString()} | Functional: ${alert.functional.toLocaleString()}</div>
-            </div>
+            <div class="alert-info"><div class="alert-title ${alert.level}">${alert.ta}</div><div class="alert-stats">Total: ${alert.total.toLocaleString()} | Functional: ${alert.functional.toLocaleString()}</div></div>
             <div class="alert-rate ${alert.level}">${alert.rate.toFixed(1)}%</div>
         </div>
     `).join('');
@@ -179,10 +293,7 @@ function displayTAAlerts(alerts, district) {
 function goToDistrict(district) {
     switchMainTab('district');
     const select = document.getElementById('tableSelect');
-    if (select) {
-        select.value = district.toLowerCase();
-        select.dispatchEvent(new Event('change'));
-    }
+    if (select) { select.value = district.toLowerCase(); select.dispatchEvent(new Event('change')); }
     setTimeout(() => { switchSubTab('district', 'dashboard'); }, 100);
     document.getElementById('map')?.scrollIntoView({ behavior: 'smooth' });
 }
@@ -190,16 +301,10 @@ function goToDistrict(district) {
 function filterByTA(district, ta) {
     switchMainTab('district');
     const districtSelect = document.getElementById('tableSelect');
-    if (districtSelect) {
-        districtSelect.value = district.toLowerCase();
-        districtSelect.dispatchEvent(new Event('change'));
-    }
+    if (districtSelect) { districtSelect.value = district.toLowerCase(); districtSelect.dispatchEvent(new Event('change')); }
     setTimeout(() => {
         const taSelect = document.getElementById('districtSelect');
-        if (taSelect) {
-            taSelect.value = ta;
-            taSelect.dispatchEvent(new Event('change'));
-        }
+        if (taSelect) { taSelect.value = ta; taSelect.dispatchEvent(new Event('change')); }
         switchSubTab('district', 'dashboard');
     }, 500);
     document.getElementById('map')?.scrollIntoView({ behavior: 'smooth' });
@@ -209,9 +314,7 @@ function filterByTA(district, ta) {
 function initMap() {
     if (typeof L === 'undefined') { console.error("Leaflet not loaded"); return; }
     map = L.map("map").setView([-13.5, 34.0], 7);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
     markersLayer = L.layerGroup().addTo(map);
     map.on('click', function(e) {
         const modal = document.getElementById('dataEntryModal');
@@ -235,9 +338,7 @@ function loadMap(table = "nsanje", TA = "", type = "") {
         const bounds = [];
         validPoints.forEach(p => {
             const lat = parseFloat(p.Latitude), lng = parseFloat(p.Longitude);
-            const marker = L.circleMarker([lat, lng], {
-                radius: 6, fillColor: getStatusColor(p.status), color: "#fff", weight: 1, fillOpacity: 0.85
-            });
+            const marker = L.circleMarker([lat, lng], { radius: 6, fillColor: getStatusColor(p.status), color: "#fff", weight: 1, fillOpacity: 0.85 });
             marker.bindPopup(`<strong>${p.Name || "Unknown"}</strong><br>Status: ${p.status || "N/A"}`);
             marker.addTo(markersLayer);
             bounds.push([lat, lng]);
@@ -305,7 +406,8 @@ function renderTable(data, title) {
         <div style="overflow-x:auto"><table><thead><tr><th>Status</th><th>Count</th><th>Percentage</th></tr></thead>
         <tbody>${data.map((d, i) => `<tr><td><span class="dot" style="background:${COLORS[i % COLORS.length]}"></span>${d.status}</td>
         <td>${Number(d.total).toLocaleString()}</td><td>${((Number(d.total) / total) * 100).toFixed(1)}%</td></tr>`).join('')}</tbody>
-        <tfoot><tr><td><strong>Total</strong></td><td><strong>${total.toLocaleString()}</strong></td><td><strong>100%</strong></td></tr></tfoot></table></div>`;
+        <tfoot><tr><td><strong>Total</strong></td><td><strong>${total.toLocaleString()}</strong></td><td><strong>100%</strong></td></tr></tfoot>
+        </div>`;
 }
 
 function loadNational() {
@@ -347,7 +449,7 @@ function loadNational() {
         <td>${Number(d.abandoned).toLocaleString()}</td>
         <td>${Number(d.total)>0?((Number(d.functional)/Number(d.total))*100).toFixed(1)+"%":"0%"}</td></tr>`).join('')}</tbody>
         <tfoot><tr><td><strong>Total</strong></td><td><strong>${grandTotal.toLocaleString()}</strong></td>
-        <td><strong>${grandFunctional.toLocaleString()}</strong></td><td colspan="4"></td></tr></tfoot></table></div>`;
+        <td><strong>${grandFunctional.toLocaleString()}</strong></td><td colspan="4"></td></tr></tfoot></div>`;
     });
 }
 
@@ -382,6 +484,7 @@ document.getElementById("tableSelect").addEventListener("change", function() {
     fetchData(table);
     loadMap(table);
     if (document.getElementById("districtTAAlerts").classList.contains("active")) loadTAAlerts();
+    if (document.getElementById("districtTrends").classList.contains("active")) loadTrendData();
 });
 document.getElementById("districtSelect").addEventListener("change", getFilters);
 document.getElementById("typeSelect").addEventListener("change", getFilters);
