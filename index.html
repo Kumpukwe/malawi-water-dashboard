@@ -128,6 +128,10 @@
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
         .tab.active {
@@ -401,6 +405,14 @@
             display: none !important;
         }
 
+        /* Flag styles */
+        .flag-icon {
+            width: 24px;
+            height: 16px;
+            border-radius: 2px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+
         @media (max-width: 768px) {
             .stats-grid {
                 grid-template-columns: repeat(2, 1fr);
@@ -564,7 +576,7 @@
             .form-group select,
             .form-group textarea {
                 padding: 12px;
-                font-size: 16px; /* Prevents zoom on iOS */
+                font-size: 16px;
             }
             
             table {
@@ -652,9 +664,14 @@
 <body>
     <div class="container">
         <header>
-            <img src="/baseflow-logo.png.jpg" alt="Baseflow">
-            <h1>💧 Malawi Water Points Dashboard</h1>
-            <p>Monitoring Water Point Functionality Across All Districts</p>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap;">
+                <img src="/baseflow-logo.png.jpg" alt="Baseflow" style="height: 70px;">
+                <img src="/mw.png" alt="Malawi Flag" style="height: 50px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                <div>
+                    <h1>💧 Malawi Water Points Dashboard</h1>
+                    <p>Monitoring Water Point Functionality Across All Districts</p>
+                </div>
+            </div>
         </header>
 
         <!-- Login Button (visible when not logged in) -->
@@ -674,8 +691,14 @@
         </div>
 
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('district')">🏘️ District View</button>
-            <button class="tab" onclick="switchTab('national')">🇲🇼 National View</button>
+            <button class="tab active" onclick="switchTab('district')">
+                <img src="/mw.png" alt="Malawi Flag" class="flag-icon">
+                District View
+            </button>
+            <button class="tab" onclick="switchTab('national')">
+                <img src="/mw.png" alt="Malawi Flag" class="flag-icon">
+                National View
+            </button>
         </div>
 
         <!-- District Tab -->
