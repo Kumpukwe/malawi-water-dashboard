@@ -120,9 +120,18 @@ function loadNational() {
                     responsive: true,
                     plugins: {
                         legend: { display: true, position: "top" },
-                        title: { display: true, text: "Water Point Status by District" }
+                        title: { display: true, text: "Water Point Status by District" },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.raw;
+                                    const datasetLabel = context.dataset.label;
+                                    return `${datasetLabel}: ${value.toLocaleString()} points`;
+                                }
+                            }
+                        }
                     },
-                    scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }
+                    scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Number of Water Points' } } }
                 }
             });
 
@@ -312,6 +321,7 @@ function renderCards(data) {
     document.getElementById("cardAbandoned").textContent = abandoned.toLocaleString();
     document.getElementById("cardAbandonedPct").textContent = pct(abandoned);
 }
+
 function loadDistricts(table) {
     fetch(`${API_URL}/districts?table=${encodeURIComponent(table)}`)
         .then(res => res.json())
@@ -407,27 +417,83 @@ function fetchData(table = "nsanje", TA = "", type = "") {
             const labels = data.map(d => d.status);
             const counts = data.map(d => Number(d.total));
             const colors = labels.map((_, i) => COLORS[i % COLORS.length]);
+            const totalCount = counts.reduce((a, b) => a + b, 0);
 
             let title = table.charAt(0).toUpperCase() + table.slice(1);
             if (TA) title += ` — ${TA}`;
             if (type) title += ` — ${type}`;
 
+            // Bar Chart with figures
             if (barChart) barChart.destroy();
             barChart = new Chart(barCtx, {
                 type: "bar",
-                data: { labels, datasets: [{ label: title, data: counts, backgroundColor: colors }] },
+                data: { 
+                    labels: labels, 
+                    datasets: [{ 
+                        label: title, 
+                        data: counts, 
+                        backgroundColor: colors,
+                        borderColor: colors,
+                        borderWidth: 1
+                    }] 
+                },
                 options: {
                     responsive: true,
-                    plugins: { legend: { display: false }, title: { display: true, text: `Functionality Status — ${title}` } },
-                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+                    plugins: {
+                        legend: { display: true, position: 'top' },
+                        title: { display: true, text: `Functionality Status — ${title}` },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.raw;
+                                    const percentage = ((value / totalCount) * 100).toFixed(1);
+                                    return `${context.dataset.label}: ${value.toLocaleString()} points (${percentage}%)`;
+                                }
+                            }
+                        }
+                    },
+                    scales: { 
+                        y: { 
+                            beginAtZero: true, 
+                            ticks: { precision: 0 },
+                            title: { display: true, text: 'Number of Water Points' }
+                        },
+                        x: {
+                            title: { display: true, text: 'Status' }
+                        }
+                    }
                 }
             });
 
+            // Doughnut Chart with figures
             if (doughnutChart) doughnutChart.destroy();
             doughnutChart = new Chart(doughnutCtx, {
                 type: "doughnut",
-                data: { labels, datasets: [{ data: counts, backgroundColor: colors }] },
-                options: { responsive: true, plugins: { legend: { display: true, position: "bottom" }, title: { display: true, text: `Distribution — ${title}` } } }
+                data: { 
+                    labels: labels, 
+                    datasets: [{ 
+                        data: counts, 
+                        backgroundColor: colors,
+                        borderWidth: 2,
+                        borderColor: "#fff"
+                    }] 
+                },
+                options: { 
+                    responsive: true, 
+                    plugins: { 
+                        legend: { display: true, position: "bottom" },
+                        title: { display: true, text: `Distribution — ${title}` },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.raw;
+                                    const percentage = ((value / totalCount) * 100).toFixed(1);
+                                    return `${context.label}: ${value.toLocaleString()} points (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
             });
 
             renderTable(data, title);
@@ -556,10 +622,8 @@ function updateOfficerBar() {
     if (currentOfficer) {
         document.getElementById('officerBar').style.display = 'block';
         
-        // Set name
         document.getElementById('officerName').textContent = currentOfficer.full_name || currentOfficer.username;
         
-        // Set badge
         const districtBadge = document.getElementById('officerDistrict');
         if (currentOfficer.district) {
             districtBadge.textContent = `${currentOfficer.district.toUpperCase()} District Water Officer`;
