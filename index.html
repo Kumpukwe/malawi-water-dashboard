@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <link rel="manifest" href="/manifest.json">
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="MW Water">
     <meta charset="UTF-8">
@@ -111,6 +111,7 @@
             background: #1e3c2c;
         }
 
+        /* Main Tabs */
         .tabs {
             display: flex;
             gap: 12px;
@@ -139,11 +140,51 @@
             color: white;
         }
 
-        .tab-content {
+        /* Sub-tabs */
+        .sub-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 10px;
+        }
+
+        .sub-tab {
+            padding: 8px 20px;
+            background: none;
+            border: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            color: #6b7280;
+            transition: all 0.3s ease;
+            border-radius: 6px;
+        }
+
+        .sub-tab:hover {
+            background: #f3f4f6;
+            color: #1e3c2c;
+        }
+
+        .sub-tab.active {
+            background: #2a5a3a;
+            color: white;
+        }
+
+        /* Main Content Containers */
+        .main-tab-content {
             display: none;
         }
 
-        .tab-content.active {
+        .main-tab-content.active {
+            display: block;
+        }
+
+        .sub-tab-content {
+            display: none;
+        }
+
+        .sub-tab-content.active {
             display: block;
         }
 
@@ -400,12 +441,111 @@
             background: #1e3c2c;
         }
 
+        /* Alerts Container */
+        .alerts-container-full {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .alerts-container-full h2 {
+            color: #1e3c2c;
+            margin-bottom: 10px;
+        }
+
+        .alert-description {
+            color: #6b7280;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
+
+        .alerts-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .alert-card {
+            background: #f9fafb;
+            border-radius: 10px;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-left: 4px solid;
+        }
+
+        .alert-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .alert-card.critical {
+            border-left-color: #dc2626;
+            background: #fef2f2;
+        }
+
+        .alert-card.warning {
+            border-left-color: #d97706;
+            background: #fffbeb;
+        }
+
+        .alert-card.success {
+            border-left-color: #16a34a;
+            background: #f0fdf4;
+        }
+
+        .alert-info {
+            flex: 1;
+        }
+
+        .alert-title {
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 5px;
+        }
+
+        .alert-title.critical {
+            color: #dc2626;
+        }
+
+        .alert-title.warning {
+            color: #d97706;
+        }
+
+        .alert-stats {
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+
+        .alert-rate {
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-align: right;
+        }
+
+        .alert-rate.critical {
+            color: #dc2626;
+        }
+
+        .alert-rate.warning {
+            color: #d97706;
+        }
+
+        .loading, .info {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+
         /* Hide elements */
         .hidden {
             display: none !important;
         }
 
-        /* Flag styles */
         .flag-icon {
             width: 24px;
             height: 16px;
@@ -433,22 +573,33 @@
             header h1 {
                 font-size: 1.5rem;
             }
+
+            .alert-card {
+                flex-direction: column;
+                text-align: center;
+                gap: 10px;
+            }
+            
+            .alert-rate {
+                text-align: center;
+            }
+            
+            .sub-tab {
+                padding: 6px 12px;
+                font-size: 0.8rem;
+            }
         }
         
-        /* ============ MOBILE OPTIMIZATIONS ============ */
-        
-        /* Touch-friendly buttons */
-        button, .tab, select, .export-btn, .floating-btn, .logout-small, .login-btn {
+        /* Mobile Optimizations */
+        button, .tab, select, .export-btn, .floating-btn, .logout-small, .login-btn, .sub-tab {
             min-height: 44px;
             -webkit-tap-highlight-color: transparent;
         }
         
-        /* Better touch scrolling */
         .map-container, .table-container {
             -webkit-overflow-scrolling: touch;
         }
         
-        /* Improve mobile layout */
         @media (max-width: 768px) {
             .container {
                 padding: 12px;
@@ -593,7 +744,6 @@
             }
         }
         
-        /* Extra small phones */
         @media (max-width: 480px) {
             .stats-grid {
                 grid-template-columns: 1fr 1fr;
@@ -622,7 +772,6 @@
             }
         }
         
-        /* Landscape mode optimization */
         @media (max-width: 900px) and (orientation: landscape) {
             #map {
                 height: 250px;
@@ -633,7 +782,6 @@
             }
         }
         
-        /* Disable hover effects on touch devices */
         @media (hover: none) {
             .stat-card:hover {
                 transform: none;
@@ -644,18 +792,15 @@
             }
         }
         
-        /* Improve tap targets */
-        button, .tab, select, .export-btn, .floating-btn, .logout-small, .login-btn, .close-modal {
+        button, .tab, select, .export-btn, .floating-btn, .logout-small, .login-btn, .close-modal, .sub-tab {
             cursor: pointer;
         }
         
-        /* Prevent text selection on buttons */
-        button, .tab, .export-btn, .login-btn {
+        button, .tab, .export-btn, .login-btn, .sub-tab {
             user-select: none;
             -webkit-user-select: none;
         }
         
-        /* Smooth scrolling for the whole page */
         html {
             scroll-behavior: smooth;
         }
@@ -665,13 +810,13 @@
     <div class="container">
         <header>
             <div style="display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap;">
-        <img src="/baseflow-logo.png.jpg" alt="Baseflow" style="height: 70px;">
-        <div>
-            <h1>💧 Malawi Water Points Dashboard</h1>
-            <p>Monitoring Water Point Functionality Across All Districts</p>
-        </div>
-    </div>
-</header>
+                <img src="/baseflow-logo.png.jpg" alt="Baseflow" style="height: 70px;">
+                <div>
+                    <h1>💧 Malawi Water Points Dashboard</h1>
+                    <p>Monitoring Water Point Functionality Across All Districts</p>
+                </div>
+            </div>
+        </header>
 
         <!-- Login Button (visible when not logged in) -->
         <div id="loginButton" style="text-align: right; margin-bottom: 10px;">
@@ -689,136 +834,171 @@
             <button onclick="logout()" class="logout-small">Logout</button>
         </div>
 
+        <!-- Main Tabs -->
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('district')">
-                <img src="/mw.png" alt="Malawi Flag" class="flag-icon">
-                District View
-            </button>
-            <button class="tab" onclick="switchTab('national')">
-                <img src="/mw.png" alt="Malawi Flag" class="flag-icon">
-                National View
-            </button>
+            <button class="tab active" onclick="switchMainTab('district')">🏘️ District View</button>
+            <button class="tab" onclick="switchMainTab('national')">🇲🇼 National View</button>
         </div>
 
-        <!-- District Tab -->
-        <div id="districtTab" class="tab-content active">
-            <div class="stats-grid" id="districtStats">
-                <div class="stat-card">
-                    <h3>Total Water Points</h3>
-                    <div class="number" id="cardTotal">0</div>
+        <!-- ============ DISTRICT VIEW CONTAINER ============ -->
+        <div id="districtContainer" class="main-tab-content active">
+            <!-- Sub-tabs for District View -->
+            <div class="sub-tabs">
+                <button class="sub-tab active" onclick="switchSubTab('district', 'dashboard')">📊 Dashboard</button>
+                <button class="sub-tab" onclick="switchSubTab('district', 'ta-alerts')">📍 TA Alerts</button>
+            </div>
+            
+            <!-- District Dashboard Sub-tab -->
+            <div id="districtDashboardTab" class="sub-tab-content active">
+                <div class="stats-grid" id="districtStats">
+                    <div class="stat-card">
+                        <h3>Total Water Points</h3>
+                        <div class="number" id="cardTotal">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Functional</h3>
+                        <div class="number" id="cardFunctional">0</div>
+                        <div class="percentage" id="cardFunctionalPct">0%</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Partially Functional</h3>
+                        <div class="number" id="cardPartial">0</div>
+                        <div class="percentage" id="cardPartialPct">0%</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Not Functional</h3>
+                        <div class="number" id="cardNotFunctional">0</div>
+                        <div class="percentage" id="cardNotFunctionalPct">0%</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Abandoned</h3>
+                        <div class="number" id="cardAbandoned">0</div>
+                        <div class="percentage" id="cardAbandonedPct">0%</div>
+                    </div>
                 </div>
-                <div class="stat-card">
-                    <h3>Functional</h3>
-                    <div class="number" id="cardFunctional">0</div>
-                    <div class="percentage" id="cardFunctionalPct">0%</div>
+
+                <div class="filters">
+                    <select id="tableSelect">
+                        <option value="nsanje">Nsanje</option>
+                        <option value="chikwawa">Chikwawa</option>
+                        <option value="blantyre">Blantyre</option>
+                        <option value="chiradzulo">Chiradzulo</option>
+                        <option value="thyolo">Thyolo</option>
+                        <option value="mulanje">Mulanje</option>
+                        <option value="phalombe">Phalombe</option>
+                        <option value="zomba">Zomba</option>
+                        <option value="machinga">Machinga</option>
+                        <option value="mangochi">Mangochi</option>
+                        <option value="balaka">Balaka</option>
+                        <option value="ntcheu">Ntcheu</option>
+                        <option value="dedza">Dedza</option>
+                        <option value="salima">Salima</option>
+                        <option value="lilongwe">Lilongwe</option>
+                        <option value="mchinji">Mchinji</option>
+                        <option value="dowa">Dowa</option>
+                        <option value="ntchisi">Ntchisi</option>
+                        <option value="kasungu">Kasungu</option>
+                        <option value="nkhotakota">Nkhotakota</option>
+                        <option value="nkhatabay">Nkhatabay</option>
+                        <option value="mzimba">Mzimba</option>
+                        <option value="karonga">Karonga</option>
+                        <option value="chitipa">Chitipa</option>
+                        <option value="likoma">Likoma</option>
+                    </select>
+                    <select id="districtSelect">
+                        <option value="">All Traditional Authorities</option>
+                    </select>
+                    <select id="typeSelect">
+                        <option value="">All Water Point Types</option>
+                    </select>
                 </div>
-                <div class="stat-card">
-                    <h3>Partially Functional</h3>
-                    <div class="number" id="cardPartial">0</div>
-                    <div class="percentage" id="cardPartialPct">0%</div>
+
+                <div class="chart-container">
+                    <canvas id="barChart"></canvas>
                 </div>
-                <div class="stat-card">
-                    <h3>Not Functional</h3>
-                    <div class="number" id="cardNotFunctional">0</div>
-                    <div class="percentage" id="cardNotFunctionalPct">0%</div>
+
+                <div class="chart-container">
+                    <canvas id="doughnutChart"></canvas>
                 </div>
-                <div class="stat-card">
-                    <h3>Abandoned</h3>
-                    <div class="number" id="cardAbandoned">0</div>
-                    <div class="percentage" id="cardAbandonedPct">0%</div>
+
+                <div class="map-container">
+                    <div id="map"></div>
+                </div>
+
+                <div class="table-container" id="tableContainer">
+                    <h2>Summary</h2>
+                    <p>Loading data...</p>
                 </div>
             </div>
-
-            <div class="filters">
-                <select id="tableSelect">
-                    <option value="nsanje">Nsanje</option>
-                    <option value="chikwawa">Chikwawa</option>
-                    <option value="blantyre">Blantyre</option>
-                    <option value="chiradzulo">Chiradzulo</option>
-                    <option value="thyolo">Thyolo</option>
-                    <option value="mulanje">Mulanje</option>
-                    <option value="phalombe">Phalombe</option>
-                    <option value="zomba">Zomba</option>
-                    <option value="machinga">Machinga</option>
-                    <option value="mangochi">Mangochi</option>
-                    <option value="balaka">Balaka</option>
-                    <option value="ntcheu">Ntcheu</option>
-                    <option value="dedza">Dedza</option>
-                    <option value="salima">Salima</option>
-                    <option value="lilongwe">Lilongwe</option>
-                    <option value="mchinji">Mchinji</option>
-                    <option value="dowa">Dowa</option>
-                    <option value="ntchisi">Ntchisi</option>
-                    <option value="kasungu">Kasungu</option>
-                    <option value="nkhotakota">Nkhotakota</option>
-                    <option value="nkhatabay">Nkhatabay</option>
-                    <option value="mzimba">Mzimba</option>
-                    <option value="karonga">Karonga</option>
-                    <option value="chitipa">Chitipa</option>
-                    <option value="likoma">Likoma</option>
-                </select>
-                <select id="districtSelect">
-                    <option value="">All Traditional Authorities</option>
-                </select>
-                <select id="typeSelect">
-                    <option value="">All Water Point Types</option>
-                </select>
-            </div>
-
-            <div class="chart-container">
-                <canvas id="barChart"></canvas>
-            </div>
-
-            <div class="chart-container">
-                <canvas id="doughnutChart"></canvas>
-            </div>
-
-            <div class="map-container">
-                <div id="map"></div>
-            </div>
-
-            <div class="table-container" id="tableContainer">
-                <h2>Summary</h2>
-                <p>Loading data...</p>
+            
+            <!-- District TA Alerts Sub-tab -->
+            <div id="districtTAAlertsTab" class="sub-tab-content">
+                <div class="alerts-container-full">
+                    <h2>📍 Traditional Authority Alerts</h2>
+                    <p class="alert-description">Showing TA alerts for: <strong id="selectedDistrictName">Nsanje</strong> District</p>
+                    <div id="taAlertsList" class="alerts-list">
+                        <div class="loading">Loading TA alerts...</div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- National Tab -->
-        <div id="nationalTab" class="tab-content">
-            <div class="stats-grid" id="nationalStats">
-                <div class="stat-card">
-                    <h3>Total Water Points</h3>
-                    <div class="number" id="natCardTotal">0</div>
+        <!-- ============ NATIONAL VIEW CONTAINER ============ -->
+        <div id="nationalContainer" class="main-tab-content">
+            <!-- Sub-tabs for National View -->
+            <div class="sub-tabs">
+                <button class="sub-tab active" onclick="switchSubTab('national', 'dashboard')">📊 Dashboard</button>
+                <button class="sub-tab" onclick="switchSubTab('national', 'district-alerts')">🔴 District Alerts</button>
+            </div>
+            
+            <!-- National Dashboard Sub-tab -->
+            <div id="nationalDashboardTab" class="sub-tab-content active">
+                <div class="stats-grid" id="nationalStats">
+                    <div class="stat-card">
+                        <h3>Total Water Points</h3>
+                        <div class="number" id="natCardTotal">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Functional</h3>
+                        <div class="number" id="natCardFunctional">0</div>
+                        <div class="percentage" id="natCardFunctionalPct">0%</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Partially Functional</h3>
+                        <div class="number" id="natCardPartial">0</div>
+                        <div class="percentage" id="natCardPartialPct">0%</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Not Functional</h3>
+                        <div class="number" id="natCardNotFunctional">0</div>
+                        <div class="percentage" id="natCardNotFunctionalPct">0%</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Abandoned</h3>
+                        <div class="number" id="natCardAbandoned">0</div>
+                        <div class="percentage" id="natCardAbandonedPct">0%</div>
+                    </div>
                 </div>
-                <div class="stat-card">
-                    <h3>Functional</h3>
-                    <div class="number" id="natCardFunctional">0</div>
-                    <div class="percentage" id="natCardFunctionalPct">0%</div>
+
+                <div class="chart-container">
+                    <canvas id="nationalChart"></canvas>
                 </div>
-                <div class="stat-card">
-                    <h3>Partially Functional</h3>
-                    <div class="number" id="natCardPartial">0</div>
-                    <div class="percentage" id="natCardPartialPct">0%</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Not Functional</h3>
-                    <div class="number" id="natCardNotFunctional">0</div>
-                    <div class="percentage" id="natCardNotFunctionalPct">0%</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Abandoned</h3>
-                    <div class="number" id="natCardAbandoned">0</div>
-                    <div class="percentage" id="natCardAbandonedPct">0%</div>
+
+                <div class="table-container" id="nationalTableContainer">
+                    <h2>National Summary Table</h2>
+                    <p>Loading data...</p>
                 </div>
             </div>
-
-            <div class="chart-container">
-                <canvas id="nationalChart"></canvas>
-            </div>
-
-            <div class="table-container" id="nationalTableContainer">
-                <h2>National Summary Table</h2>
-                <p>Loading data...</p>
+            
+            <!-- National District Alerts Sub-tab -->
+            <div id="nationalDistrictAlertsTab" class="sub-tab-content">
+                <div class="alerts-container-full">
+                    <h2>🏘️ District Alerts - National Level</h2>
+                    <p class="alert-description">Districts with functionality rate below 65% need attention</p>
+                    <div id="districtAlertsList" class="alerts-list">
+                        <div class="loading">Loading district alerts...</div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -949,7 +1129,7 @@
 
     <script src="script.js"></script>
     <script>
-        // Fix for Leaflet map on mobile - ensure map resizes correctly
+         // Fix for Leaflet map on mobile - ensure map resizes correctly
         window.addEventListener('resize', function() {
             if (map) {
                 setTimeout(function() {
@@ -957,17 +1137,6 @@
                 }, 200);
             }
         });
-        
-        // Also invalidate map size when switching tabs
-        const originalSwitchTab = switchTab;
-        window.switchTab = function(tab) {
-            originalSwitchTab(tab);
-            setTimeout(function() {
-                if (map) {
-                    map.invalidateSize();
-                }
-            }, 100);
-        };
         
         // Handle orientation change
         window.addEventListener('orientationchange', function() {
@@ -980,3 +1149,6 @@
     </script>
 </body>
 </html>
+
+
+
