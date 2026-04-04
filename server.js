@@ -515,6 +515,37 @@ app.get('/api/debug-tables', (req, res) => {
     });
 });
 
+// Add a test snapshot from 30 days ago
+app.get('/api/add-test-snapshot', (req, res) => {
+    // First, get current data for nsanje
+    const query = `
+        INSERT INTO historical_snapshots 
+        (district, snapshot_date, functional_count, partially_functional_count, not_functional_count, abandoned_count, total_count, functional_rate)
+        SELECT 
+            district,
+            DATE_SUB(CURDATE(), INTERVAL 30 DAY) as snapshot_date,
+            functional_count - FLOOR(functional_count * 0.05) as functional_count,
+            partially_functional_count + FLOOR(partially_functional_count * 0.03) as partially_functional_count,
+            not_functional_count + FLOOR(not_functional_count * 0.02) as not_functional_count,
+            abandoned_count,
+            total_count,
+            ROUND(((functional_count - FLOOR(functional_count * 0.05)) / total_count) * 100, 2) as functional_rate
+        FROM historical_snapshots
+        WHERE snapshot_date = CURDATE() AND district = 'nsanje'
+    `;
+    
+    executeQuery(query, [], (err, result) => {
+        if (err) {
+            res.json({ error: err.message });
+        } else {
+            res.json({ 
+                success: true, 
+                message: "Test snapshot added from 30 days ago",
+                affectedRows: result.affectedRows
+            });
+        }
+    });
+});
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
