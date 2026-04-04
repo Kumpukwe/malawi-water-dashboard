@@ -57,7 +57,6 @@ pool.getConnection((err, connection) => {
 
 // Initialize database tables
 function initializeDatabase() {
-    // Create historical_snapshots table for trends
     const createHistoricalTable = `
         CREATE TABLE IF NOT EXISTS historical_snapshots (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -317,7 +316,6 @@ app.get('/national', (req, res) => {
 
 // ============ TREND ANALYSIS ENDPOINTS ============
 
-// Get historical trends for a district
 app.get('/api/trends', (req, res) => {
     const { district, period = '6months' } = req.query;
     
@@ -394,7 +392,6 @@ app.get('/api/trends', (req, res) => {
     });
 });
 
-// Get monthly summary for a district
 app.get('/api/monthly-summary', (req, res) => {
     const { district } = req.query;
     
@@ -425,7 +422,6 @@ app.get('/api/monthly-summary', (req, res) => {
     });
 });
 
-// Record a snapshot of current data
 app.get('/api/record-snapshot', (req, res) => {
     executeQuery("SHOW TABLES", [], (err, tables) => {
         if (err) {
@@ -481,6 +477,76 @@ app.get('/api/record-snapshot', (req, res) => {
     });
 });
 
+// Force add a test snapshot from 45 days ago to create trend data
+app.get('/api/force-test-snapshot', (req, res) => {
+    const getCurrentData = `
+        SELECT 
+            COUNT(*) as total_count,
+            SUM(CASE WHEN Functionality_Status = 'Functional' THEN 1 ELSE 0 END) as functional_count,
+            SUM(CASE WHEN Functionality_Status = 'Partially functional but in need of repair' THEN 1 ELSE 0 END) as partially_count,
+            SUM(CASE WHEN Functionality_Status = 'Not functional' THEN 1 ELSE 0 END) as not_functional_count,
+            SUM(CASE WHEN Functionality_Status = 'No longer exists or abandoned' THEN 1 ELSE 0 END) as abandoned_count
+        FROM nsanje
+    `;
+    
+    executeQuery(getCurrentData, [], (err, current) => {
+        if (err) {
+            return res.json({ error: err.message });
+        }
+        
+        const data = current[0];
+        const total = data.total_count || 1;
+        const functional = data.functional_count || 0;
+        const currentRate = (functional / total) * 100;
+        
+        const insertQuery = `
+            INSERT INTO historical_snapshots 
+            (district, snapshot_date, functional_count, partially_functional_count, not_functional_count, abandoned_count, total_count, functional_rate)
+            VALUES (
+                'nsanje',
+                DATE_SUB(CURDATE(), INTERVAL 45 DAY),
+                ${Math.round(functional * 0.85)},
+                ${data.partially_count || 0},
+                ${data.not_functional_count || 0},
+                ${data.abandoned_count || 0},
+                ${total},
+                ${(currentRate * 0.85).toFixed(2)}
+            )
+            ON DUPLICATE KEY UPDATE
+                functional_count = VALUES(functional_count),
+                functional_rate = VALUES(functional_rate)
+        `;
+        
+        executeQuery(insertQuery, [], (err2, result) => {
+            if (err2) {
+                res.json({ error: err2.message });
+            } else {
+                res.json({ 
+                    success: true, 
+                    message: "Test snapshot added from 45 days ago",
+                    current_rate: currentRate.toFixed(2) + "%",
+                    old_rate: (currentRate * 0.85).toFixed(2) + "%",
+                    affectedRows: result.affectedRows
+                });
+            }
+        });
+    });
+});
+
+// View existing snapshots
+app.get('/api/view-snapshots', (req, res) => {
+    executeQuery("SELECT * FROM historical_snapshots WHERE district = 'nsanje' ORDER BY snapshot_date", [], (err, results) => {
+        if (err) {
+            res.json({ error: err.message });
+        } else {
+            res.json({ 
+                count: results.length,
+                snapshots: results
+            });
+        }
+    });
+});
+
 // ============ TEST ENDPOINTS ============
 
 app.get('/api/test', (req, res) => {
@@ -515,37 +581,6 @@ app.get('/api/debug-tables', (req, res) => {
     });
 });
 
-// Add a test snapshot from 30 days ago
-app.get('/api/add-test-snapshot', (req, res) => {
-    // First, get current data for nsanje
-    const query = `
-        INSERT INTO historical_snapshots 
-        (district, snapshot_date, functional_count, partially_functional_count, not_functional_count, abandoned_count, total_count, functional_rate)
-        SELECT 
-            district,
-            DATE_SUB(CURDATE(), INTERVAL 30 DAY) as snapshot_date,
-            functional_count - FLOOR(functional_count * 0.05) as functional_count,
-            partially_functional_count + FLOOR(partially_functional_count * 0.03) as partially_functional_count,
-            not_functional_count + FLOOR(not_functional_count * 0.02) as not_functional_count,
-            abandoned_count,
-            total_count,
-            ROUND(((functional_count - FLOOR(functional_count * 0.05)) / total_count) * 100, 2) as functional_rate
-        FROM historical_snapshots
-        WHERE snapshot_date = CURDATE() AND district = 'nsanje'
-    `;
-    
-    executeQuery(query, [], (err, result) => {
-        if (err) {
-            res.json({ error: err.message });
-        } else {
-            res.json({ 
-                success: true, 
-                message: "Test snapshot added from 30 days ago",
-                affectedRows: result.affectedRows
-            });
-        }
-    });
-});
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
