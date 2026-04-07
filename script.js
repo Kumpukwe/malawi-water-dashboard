@@ -5,7 +5,7 @@ const API_URL = 'https://malawi-water-dashboard.up.railway.app';
 let barChart, doughnutChart, nationalChart, trendChart, map, markersLayer;
 let nationalLoaded = false;
 let currentOfficer = null;
-let currentGpsLocation = null; // Add this for GPS
+let currentGpsLocation = null;
 
 const COLORS = ["#16a34a", "#dc2626", "#2563eb", "#d97706", "#7c3aed", "#0891b2"];
 
@@ -156,7 +156,8 @@ function switchSubTab(mainTab, subTab) {
         } else if (subTab === 'trends') {
             document.querySelectorAll("#districtMain .sub-tab")[2].classList.add("active");
             document.getElementById("districtTrends").classList.add("active");
-            loadTrendData();
+            // Load trends when tab is switched
+            setTimeout(() => loadTrendData(), 100);
         }
     } else {
         document.querySelectorAll("#nationalMain .sub-tab").forEach(t => t.classList.remove("active"));
@@ -173,35 +174,123 @@ function switchSubTab(mainTab, subTab) {
     }
 }
 
-// ============ TREND ANALYSIS FUNCTIONS ============
+// ============ TREND ANALYSIS FUNCTIONS (FIXED) ============
 function loadTrendData() {
     const district = document.getElementById('tableSelect').value;
     const period = document.getElementById('trendPeriod').value;
     
+    console.log(`Loading trends for district: ${district}, period: ${period}`);
+    
+    // Show loading state
+    document.getElementById('trendMetrics').innerHTML = `
+        <div class="metric-card"><h4>Overall Trend</h4><div class="metric-value">Loading...</div></div>
+        <div class="metric-card"><h4>Current Rate</h4><div class="metric-value">Loading...</div></div>
+        <div class="metric-card"><h4>Best Month</h4><div class="metric-value">Loading...</div></div>
+        <div class="metric-card"><h4>Worst Month</h4><div class="metric-value">Loading...</div></div>
+    `;
+    document.getElementById('monthlySummaryTable').innerHTML = '<div class="loading">Loading trend data...</div>';
+    
     fetch(`${API_URL}/api/trends?district=${district}&period=${period}`)
-        .then(res => res.json())
+        .then(res => {
+            if (!res.ok) {
+                throw new Error(`HTTP error! status: ${res.status}`);
+            }
+            return res.json();
+        })
         .then(data => {
+            console.log('Trend data received:', data);
+            
             if (data && data.length > 0) {
                 displayTrendChart(data, district);
                 calculateTrendMetrics(data);
                 displayMonthlySummary(data);
             } else {
-                document.getElementById('trendMetrics').innerHTML = '<div class="metric-card">No trend data available yet. Daily snapshots will be recorded.</div>';
-                document.getElementById('monthlySummaryTable').innerHTML = '<div class="info">No historical data available</div>';
+                // No historical data, show current data as baseline
+                showNoTrendData(district);
             }
         })
         .catch(err => {
             console.error('Trend data error:', err);
-            document.getElementById('trendMetrics').innerHTML = '<div class="metric-card">Error loading trend data</div>';
+            showTrendError();
+        });
+}
+
+function showNoTrendData(district) {
+    // Try to get current data as baseline
+    fetch(`${API_URL}/data?table=${district}`)
+        .then(res => res.json())
+        .then(data => {
+            const total = data.reduce((sum, d) => sum + Number(d.total), 0);
+            const functional = data.find(d => d.status === 'Functional')?.total || 0;
+            const currentRate = total > 0 ? (functional / total) * 100 : 0;
+            
+            const singleDataPoint = [{
+                date: new Date().toISOString().split('T')[0],
+                functional_count: functional,
+                partially_functional_count: data.find(d => d.status === 'Partially functional but in need of repair')?.total || 0,
+                not_functional_count: data.find(d => d.status === 'Not functional')?.total || 0,
+                abandoned_count: data.find(d => d.status === 'No longer exists or abandoned')?.total || 0,
+                total_count: total,
+                functional_rate: currentRate
+            }];
+            
+            displayTrendChart(singleDataPoint, district);
+            document.getElementById('trendMetrics').innerHTML = `
+                <div class="metric-card"><h4>Status</h4><div class="metric-value">Insufficient Data</div><div class="metric-label">Need more historical data</div></div>
+                <div class="metric-card"><h4>Current Rate</h4><div class="metric-value">${currentRate.toFixed(1)}%</div><div class="metric-label">Functional</div></div>
+                <div class="metric-card"><h4>Total Points</h4><div class="metric-value">${total.toLocaleString()}</div><div class="metric-label">All water points</div></div>
+                <div class="metric-card"><h4>Functional</h4><div class="metric-value">${functional.toLocaleString()}</div><div class="metric-label">Working points</div></div>
+            `;
+            document.getElementById('monthlySummaryTable').innerHTML = '<div class="info">📊 Start recording daily snapshots to see trends. Check back in a few days.</div>';
+        })
+        .catch(() => {
+            showTrendError();
+        });
+}
+
+function showTrendError() {
+    document.getElementById('trendMetrics').innerHTML = `
+        <div class="metric-card"><h4>Error</h4><div class="metric-value">⚠️</div><div class="metric-label">Unable to load trends</div></div>
+        <div class="metric-card"><h4>Try:</h4><div class="metric-value">⟳</div><div class="metric-label">Refresh the page</div></div>
+        <div class="metric-card"><h4>Or:</h4><div class="metric-value">📸</div><div class="metric-label">Record a snapshot first</div></div>
+    `;
+    document.getElementById('monthlySummaryTable').innerHTML = `
+        <div class="error" style="padding: 20px; text-align: center; background: #fee2e2; border-radius: 8px;">
+            <p>❌ Unable to load trend data</p>
+            <button onclick="recordSnapshot()" class="export-btn" style="margin-top: 10px;">📸 Record First Snapshot</button>
+        </div>
+    `;
+}
+
+function recordSnapshot() {
+    fetch(`${API_URL}/api/record-snapshot`)
+        .then(res => res.json())
+        .then(result => {
+            if (result.success) {
+                alert('Snapshot recorded successfully! Refresh the page to see trends.');
+                loadTrendData();
+            } else {
+                alert('Error recording snapshot: ' + (result.message || 'Unknown error'));
+            }
+        })
+        .catch(err => {
+            alert('Network error recording snapshot');
         });
 }
 
 function displayTrendChart(data, district) {
     const canvas = document.getElementById('trendChart');
-    if (!canvas) return;
+    if (!canvas) {
+        console.error('Trend chart canvas not found');
+        return;
+    }
+    
     const ctx = canvas.getContext('2d');
     
-    const dates = data.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }));
+    const dates = data.map(d => {
+        const date = new Date(d.date);
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    });
     const functionalRate = data.map(d => parseFloat(d.functional_rate) || 0);
     const functionalCount = data.map(d => d.functional_count || 0);
     const totalCount = data.map(d => d.total_count || 0);
@@ -213,44 +302,95 @@ function displayTrendChart(data, district) {
         data: {
             labels: dates,
             datasets: [
-                { label: 'Functional Rate (%)', data: functionalRate, borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,0.1)', borderWidth: 3, tension: 0.4, fill: true, yAxisID: 'y', pointRadius: 4 },
-                { label: 'Functional Points', data: functionalCount, borderColor: '#2563eb', borderWidth: 2, tension: 0.4, fill: false, yAxisID: 'y1', pointRadius: 3 },
-                { label: 'Total Points', data: totalCount, borderColor: '#6b7280', borderWidth: 2, tension: 0.4, fill: false, yAxisID: 'y1', pointRadius: 3, borderDash: [5, 5] }
+                { 
+                    label: 'Functional Rate (%)', 
+                    data: functionalRate, 
+                    borderColor: '#16a34a', 
+                    backgroundColor: 'rgba(22,163,74,0.1)', 
+                    borderWidth: 3, 
+                    tension: 0.4, 
+                    fill: true, 
+                    yAxisID: 'y', 
+                    pointRadius: 5,
+                    pointHoverRadius: 7
+                },
+                { 
+                    label: 'Functional Points', 
+                    data: functionalCount, 
+                    borderColor: '#2563eb', 
+                    borderWidth: 2, 
+                    tension: 0.4, 
+                    fill: false, 
+                    yAxisID: 'y1', 
+                    pointRadius: 3 
+                },
+                { 
+                    label: 'Total Points', 
+                    data: totalCount, 
+                    borderColor: '#6b7280', 
+                    borderWidth: 2, 
+                    tension: 0.4, 
+                    fill: false, 
+                    yAxisID: 'y1', 
+                    pointRadius: 3, 
+                    borderDash: [5, 5] 
+                }
             ]
         },
         options: {
-            responsive: true, maintainAspectRatio: true,
+            responsive: true, 
+            maintainAspectRatio: true,
             interaction: { mode: 'index', intersect: false },
             plugins: {
-                title: { display: true, text: `📈 Water Point Functionality Trends - ${district.toUpperCase()} District`, font: { size: 14, weight: 'bold' } },
-                tooltip: { callbacks: { label: (ctx) => ctx.dataset.label.includes('Rate') ? `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}%` : `${ctx.dataset.label}: ${ctx.raw.toLocaleString()}` } }
+                title: { 
+                    display: true, 
+                    text: `📈 Water Point Functionality Trends - ${district.toUpperCase()} District`, 
+                    font: { size: 14, weight: 'bold' } 
+                },
+                tooltip: { 
+                    callbacks: { 
+                        label: (ctx) => ctx.dataset.label.includes('Rate') 
+                            ? `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}%` 
+                            : `${ctx.dataset.label}: ${ctx.raw.toLocaleString()}`
+                    } 
+                }
             },
             scales: {
-                y: { beginAtZero: true, max: 100, title: { display: true, text: 'Functional Rate (%)' }, ticks: { callback: (v) => v + '%' } },
-                y1: { position: 'right', title: { display: true, text: 'Number of Water Points' }, grid: { drawOnChartArea: false } }
+                y: { 
+                    beginAtZero: true, 
+                    max: 100, 
+                    title: { display: true, text: 'Functional Rate (%)' }, 
+                    ticks: { callback: (v) => v + '%' } 
+                },
+                y1: { 
+                    position: 'right', 
+                    title: { display: true, text: 'Number of Water Points' }, 
+                    grid: { drawOnChartArea: false } 
+                }
             }
         }
     });
 }
 
 function calculateTrendMetrics(data) {
-    if (!data || data.length < 2) return;
+    if (!data || data.length < 2) {
+        document.getElementById('trendChange').innerHTML = '--';
+        document.getElementById('trendDirection').innerHTML = 'Insufficient data';
+        return;
+    }
     
-    const firstRate = data[0].functional_rate;
-    const lastRate = data[data.length - 1].functional_rate;
+    const firstRate = parseFloat(data[0].functional_rate);
+    const lastRate = parseFloat(data[data.length - 1].functional_rate);
     const change = lastRate - firstRate;
     const trend = change > 0 ? 'improving' : change < 0 ? 'declining' : 'stable';
     
-    const rates = data.map(d => d.functional_rate);
+    const rates = data.map(d => parseFloat(d.functional_rate));
     const bestRate = Math.max(...rates);
     const worstRate = Math.min(...rates);
     const bestIndex = rates.indexOf(bestRate);
     const worstIndex = rates.indexOf(worstRate);
     const bestMonth = data[bestIndex].date;
     const worstMonth = data[worstIndex].date;
-    
-    const totalPoints = data[data.length - 1].total_count;
-    const functionalPoints = data[data.length - 1].functional_count;
     
     document.getElementById('trendChange').innerHTML = `${change > 0 ? '+' : ''}${change.toFixed(1)}%`;
     document.getElementById('trendDirection').innerHTML = trend.toUpperCase();
@@ -261,27 +401,49 @@ function calculateTrendMetrics(data) {
     document.getElementById('worstRate').innerHTML = `${worstRate.toFixed(1)}% functional`;
     
     const trendCard = document.querySelector('#trendMetrics .metric-card:first-child');
-    trendCard.classList.add(trend);
+    if (trendCard) {
+        trendCard.classList.add(trend);
+    }
     const trendValue = document.getElementById('trendChange');
     if (change > 0) trendValue.classList.add('positive');
     else if (change < 0) trendValue.classList.add('negative');
 }
 
 function displayMonthlySummary(data) {
+    if (!data || data.length === 0) {
+        document.getElementById('monthlySummaryTable').innerHTML = '<div class="info">No summary data available</div>';
+        return;
+    }
+    
     const summaryHTML = `
         <table class="summary-table">
-            <thead><tr><th>Month</th><th>Avg. Functional Rate</th><th>Total Points</th><th>Functional</th><th>Partial</th><th>Not Functional</th></tr></thead>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Functional Rate</th>
+                    <th>Total Points</th>
+                    <th>Functional</th>
+                    <th>Partial</th>
+                    <th>Not Functional</th>
+                    <th>Abandoned</th>
+                </tr>
+            </thead>
             <tbody>
-                ${data.slice(0,6).map(month => `
-                    <tr>
-                        <td>${month.month || new Date(month.date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</td>
-                        <td class="rate-cell ${month.functional_rate >= 70 ? 'good' : month.functional_rate >= 50 ? 'warning' : 'bad'}">${month.functional_rate?.toFixed(1) || '0'}%</td>
-                        <td>${month.total_count?.toLocaleString() || '0'}</td>
-                        <td>${month.functional_count?.toLocaleString() || '0'}</td>
-                        <td>${month.partially_functional_count?.toLocaleString() || '0'}</td>
-                        <td>${month.not_functional_count?.toLocaleString() || '0'}</td>
-                    </tr>
-                `).join('')}
+                ${data.slice().reverse().map(record => {
+                    const rate = parseFloat(record.functional_rate);
+                    const rateClass = rate >= 70 ? 'good' : (rate >= 50 ? 'warning' : 'bad');
+                    return `
+                        <tr>
+                            <td>${new Date(record.snapshot_date || record.date).toLocaleDateString()}</td>
+                            <td class="rate-cell ${rateClass}">${rate.toFixed(1)}%</td>
+                            <td>${(record.total_count || 0).toLocaleString()}</td>
+                            <td>${(record.functional_count || 0).toLocaleString()}</td>
+                            <td>${(record.partially_functional_count || 0).toLocaleString()}</td>
+                            <td>${(record.not_functional_count || 0).toLocaleString()}</td>
+                            <td>${(record.abandoned_count || 0).toLocaleString()}</td>
+                        </tr>
+                    `;
+                }).join('')}
             </tbody>
         </table>
     `;
@@ -299,18 +461,36 @@ function exportTrendReport() {
             report += `District: ${district.toUpperCase()}\n`;
             report += `Period: ${period}\n`;
             report += `Generated: ${new Date().toLocaleString()}\n`;
-            report += `${'='.repeat(50)}\n\n`;
-            report += `Date,Functional Rate,Functional Points,Total Points\n`;
+            report += `${'='.repeat(60)}\n\n`;
+            report += `Date,Functional Rate (%),Functional Points,Partially Functional,Not Functional,Abandoned,Total Points\n`;
             data.forEach(d => {
-                report += `${d.date},${d.functional_rate?.toFixed(1) || '0'}%,${d.functional_count || 0},${d.total_count || 0}\n`;
+                report += `${d.date},${(d.functional_rate || 0).toFixed(1)}%,${d.functional_count || 0},${d.partially_functional_count || 0},${d.not_functional_count || 0},${d.abandoned_count || 0},${d.total_count || 0}\n`;
             });
+            
+            // Add summary at the end
+            if (data.length > 0) {
+                const lastRate = data[data.length - 1].functional_rate;
+                const firstRate = data[0].functional_rate;
+                const change = lastRate - firstRate;
+                report += `\n${'='.repeat(60)}\n`;
+                report += `SUMMARY:\n`;
+                report += `Start Rate: ${firstRate.toFixed(1)}%\n`;
+                report += `End Rate: ${lastRate.toFixed(1)}%\n`;
+                report += `Overall Change: ${change > 0 ? '+' : ''}${change.toFixed(1)}%\n`;
+                report += `Trend: ${change > 0 ? 'Improving' : (change < 0 ? 'Declining' : 'Stable')}\n`;
+            }
+            
             const blob = new Blob([report], { type: 'text/csv' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${district}_trend_report.csv`;
+            a.download = `${district}_trend_report_${new Date().toISOString().split('T')[0]}.csv`;
             a.click();
             URL.revokeObjectURL(url);
+        })
+        .catch(err => {
+            console.error('Export error:', err);
+            alert('Error generating report');
         });
 }
 
@@ -364,6 +544,10 @@ function loadTAAlerts() {
                         const functional = data.find(d => d.status === 'Functional')?.total || 0;
                         const rate = total > 0 ? (functional / total) * 100 : 100;
                         alerts.push({ ta, total, functional, rate, level: rate < 50 ? 'critical' : (rate < 65 ? 'warning' : 'success') });
+                        completed++;
+                        if (completed === tas.length) { alerts.sort((a, b) => a.rate - b.rate); displayTAAlerts(alerts, district); }
+                    })
+                    .catch(() => {
                         completed++;
                         if (completed === tas.length) { alerts.sort((a, b) => a.rate - b.rate); displayTAAlerts(alerts, district); }
                     });
@@ -491,7 +675,9 @@ function renderTable(data, title) {
         <h2>Summary — ${title}</h2><button class="export-btn" onclick="exportCSV('district')">📥 Export to CSV</button>
         <div style="overflow-x:auto"><table><thead><tr><th>Status</th><th>Count</th><th>Percentage</th></tr></thead>
         <tbody>${data.map((d, i) => `<tr><td><span class="dot" style="background:${COLORS[i % COLORS.length]}"></span>${d.status}</td>
-        <td>${Number(d.total).toLocaleString()}</td><td>${((Number(d.total) / total) * 100).toFixed(1)}%</td></tr>`).join('')}</tbody>
+        <td>${Number(d.total).toLocaleString()}</td>
+        <td>${((Number(d.total) / total) * 100).toFixed(1)}%</td>
+                    </tr>`).join('')}</tbody>
         <tfoot><tr><td><strong>Total</strong></td><td><strong>${total.toLocaleString()}</strong></td><td><strong>100%</strong></td></tr></tfoot>
         </div>`;
 }
@@ -530,12 +716,17 @@ function loadNational() {
         document.getElementById("nationalTableContainer").innerHTML = `<h2>District Summary</h2><button class="export-btn" onclick="exportCSV('national')">📥 Export CSV</button>
         <div style="overflow-x:auto"><table><thead><tr><th>District</th><th>Total</th><th>Functional</th><th>Partial</th><th>Not Functional</th><th>Abandoned</th><th>% Functional</th></tr></thead>
         <tbody>${data.map(d => `<tr><td>${d.district.charAt(0).toUpperCase()+d.district.slice(1)}</td>
-        <td>${Number(d.total).toLocaleString()}</td><td>${Number(d.functional).toLocaleString()}</td>
-        <td>${Number(d.partial).toLocaleString()}</td><td>${Number(d.not_functional).toLocaleString()}</td>
+        <td>${Number(d.total).toLocaleString()}</td>
+        <td>${Number(d.functional).toLocaleString()}</td>
+        <td>${Number(d.partial).toLocaleString()}</td>
+        <td>${Number(d.not_functional).toLocaleString()}</td>
         <td>${Number(d.abandoned).toLocaleString()}</td>
-        <td>${Number(d.total)>0?((Number(d.functional)/Number(d.total))*100).toFixed(1)+"%":"0%"}</td></tr>`).join('')}</tbody>
+        <td>${Number(d.total)>0?((Number(d.functional)/Number(d.total))*100).toFixed(1)+"%":"0%"}</td>
+                			</tr>`).join('')}</tbody>
         <tfoot><tr><td><strong>Total</strong></td><td><strong>${grandTotal.toLocaleString()}</strong></td>
-        <td><strong>${grandFunctional.toLocaleString()}</strong></td><td colspan="4"></td></tr></tfoot></div>`;
+        <td><strong>${grandFunctional.toLocaleString()}</strong></td><td colspan="4"></td>
+                		</tr></tfoot>
+        </div>`;
     });
 }
 
@@ -673,7 +864,6 @@ document.getElementById('officerLoginForm')?.addEventListener('submit', (e) => {
     }).catch(() => { document.getElementById('officerLoginError').textContent = 'Login failed'; });
 });
 
-// UPDATED FORM SUBMISSION WITH GPS VALIDATION
 document.getElementById('dataEntryForm')?.addEventListener('submit', (e) => {
     e.preventDefault();
     
