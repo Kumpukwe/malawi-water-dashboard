@@ -5,6 +5,7 @@ const API_URL = 'https://malawi-water-dashboard.up.railway.app';
 let barChart, doughnutChart, nationalChart, trendChart, map, markersLayer;
 let nationalLoaded = false;
 let currentOfficer = null;
+let currentGpsLocation = null; // Add this for GPS
 
 const COLORS = ["#16a34a", "#dc2626", "#2563eb", "#d97706", "#7c3aed", "#0891b2"];
 
@@ -23,10 +24,103 @@ const districtCoords = {
     dedza: [-14.3333, 34.3333], salima: [-13.7833, 34.4333], lilongwe: [-13.9833, 33.7833],
     mchinji: [-13.8, 32.8833], dowa: [-13.65, 33.9333], ntchisi: [-13.2833, 33.9167],
     kasungu: [-13.0333, 33.4833], nkhotakota: [-12.9167, 34.3], nkhatabay: [-12.0, 34.2667],
-    mzimba: [-11.9, 33.6], karonga: [-9.9333, 33.9333], chitipa: [-9.7, 33.2667], likoma: [-12.0667, 34.7333]
+    mzimba: [-11.9, 33.6], karonga: [-9.9333, 33.9333], chitipa: [-9.7, 33.2667], likoma: [-12.0667, 34.7337]
 };
 
 function getStatusColor(status) { return STATUS_COLORS[status] || "#2563eb"; }
+
+// ============ GPS FUNCTIONS ============
+function getCurrentLocation() {
+    const gpsBtn = document.getElementById('getGpsButton');
+    const gpsStatus = document.getElementById('gpsStatus');
+    const gpsCoordinates = document.getElementById('gpsCoordinates');
+    
+    if (!navigator.geolocation) {
+        showGpsStatus('error', '❌ Your browser does not support GPS. Please contact administrator.');
+        return;
+    }
+    
+    gpsBtn.disabled = true;
+    gpsBtn.innerHTML = '<span class="spinner"></span> Getting location...';
+    showGpsStatus('loading', '📍 Accessing GPS... Please allow location access.');
+    
+    const options = {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+    };
+    
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            const accuracy = position.coords.accuracy;
+            
+            currentGpsLocation = { lat, lng, accuracy };
+            document.getElementById('entryLat').value = lat;
+            document.getElementById('entryLng').value = lng;
+            
+            document.getElementById('gpsLat').textContent = lat.toFixed(6);
+            document.getElementById('gpsLng').textContent = lng.toFixed(6);
+            document.getElementById('gpsAccuracy').textContent = Math.round(accuracy);
+            gpsCoordinates.style.display = 'block';
+            
+            let accuracyText = '';
+            if (accuracy < 10) {
+                accuracyText = 'Excellent accuracy! (±' + Math.round(accuracy) + 'm)';
+            } else if (accuracy < 50) {
+                accuracyText = 'Good accuracy (±' + Math.round(accuracy) + 'm)';
+            } else {
+                accuracyText = 'Low accuracy (±' + Math.round(accuracy) + 'm). Consider moving to open area.';
+            }
+            
+            showGpsStatus('success', `✅ Location captured! ${accuracyText}`);
+            
+            gpsBtn.disabled = false;
+            gpsBtn.innerHTML = '📍 Update GPS Location';
+        },
+        (error) => {
+            let errorMessage = '';
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMessage = '❌ Location permission denied. Please enable location access.';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMessage = '❌ GPS signal unavailable. Please move to an open area.';
+                    break;
+                case error.TIMEOUT:
+                    errorMessage = '⏱️ GPS timeout. Please try again.';
+                    break;
+                default:
+                    errorMessage = '❌ Unable to get location. Please try again.';
+            }
+            
+            showGpsStatus('error', errorMessage);
+            gpsBtn.disabled = false;
+            gpsBtn.innerHTML = '📍 Retry GPS Location';
+        },
+        options
+    );
+}
+
+function showGpsStatus(type, message) {
+    const gpsStatus = document.getElementById('gpsStatus');
+    gpsStatus.className = `gps-status ${type}`;
+    gpsStatus.textContent = message;
+    gpsStatus.style.display = 'block';
+    
+    if (type !== 'loading') {
+        setTimeout(() => {
+            if (gpsStatus.className.includes(type)) {
+                gpsStatus.style.opacity = '0';
+                setTimeout(() => {
+                    gpsStatus.style.display = 'none';
+                    gpsStatus.style.opacity = '1';
+                }, 500);
+            }
+        }, 5000);
+    }
+}
 
 // ============ TAB SWITCHING ============
 function switchMainTab(tab) {
@@ -316,14 +410,6 @@ function initMap() {
     map = L.map("map").setView([-13.5, 34.0], 7);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
     markersLayer = L.layerGroup().addTo(map);
-    map.on('click', function(e) {
-        const modal = document.getElementById('dataEntryModal');
-        if (modal && modal.style.display === 'flex') {
-            document.getElementById('entryLat').value = e.latlng.lat.toFixed(6);
-            document.getElementById('entryLng').value = e.latlng.lng.toFixed(6);
-            showToast('Coordinates added!', 'success');
-        }
-    });
 }
 
 function loadMap(table = "nsanje", TA = "", type = "") {
@@ -518,13 +604,62 @@ function exportCSV(type) {
 // ============ AUTH ============
 function showOfficerLogin() { document.getElementById('officerLoginModal').style.display = 'flex'; }
 function closeOfficerLogin() { document.getElementById('officerLoginModal').style.display = 'none'; }
-function openDataEntryModal() { if(!currentOfficer) { showOfficerLogin(); return; } document.getElementById('dataEntryModal').style.display = 'flex'; document.getElementById('dataEntryForm').reset(); if(currentOfficer.district) { document.getElementById('entryDistrict').value = currentOfficer.district; document.getElementById('entryDistrict').disabled = true; } }
+
+function openDataEntryModal() {
+    if(!currentOfficer) { showOfficerLogin(); return; }
+    document.getElementById('dataEntryModal').style.display = 'flex';
+    document.getElementById('dataEntryForm').reset();
+    document.getElementById('gpsCoordinates').style.display = 'none';
+    document.getElementById('gpsStatus').innerHTML = '';
+    currentGpsLocation = null;
+    if(currentOfficer.district) { 
+        document.getElementById('entryDistrict').value = currentOfficer.district;
+        document.getElementById('entryDistrict').disabled = true;
+    }
+}
+
 function closeDataEntryModal() { document.getElementById('dataEntryModal').style.display = 'none'; }
-function showToast(msg, type) { const toast = document.createElement('div'); toast.textContent = msg; toast.style.cssText = `position:fixed;bottom:100px;right:30px;background:${type==='success'?'#2a5a3a':'#dc2626'};color:white;padding:12px 24px;border-radius:8px;z-index:2000`; document.body.appendChild(toast); setTimeout(()=>toast.remove(),3000); }
-function showMessage(msg, type) { const div = document.getElementById('entryMessage'); div.innerHTML = `<div style="padding:10px;background:${type==='success'?'#d1fae5':'#fee2e2'};color:${type==='success'?'#065f46':'#991b1b'}">${msg}</div>`; setTimeout(()=>div.innerHTML='',3000); }
-function updateOfficerBar() { if(currentOfficer) { document.getElementById('officerBar').style.display = 'block'; document.getElementById('officerName').textContent = currentOfficer.full_name || currentOfficer.username; const badge = document.getElementById('officerDistrict'); if(currentOfficer.district) badge.textContent = `${currentOfficer.district.toUpperCase()} District Water Officer`; else if(currentOfficer.role === 'admin') badge.textContent = 'System Administrator'; else badge.textContent = 'District Water Officer'; document.getElementById('dataEntryButton').style.display = 'block'; } else { document.getElementById('officerBar').style.display = 'none'; document.getElementById('dataEntryButton').style.display = 'none'; } }
-function checkOfficerSession() { fetch(`${API_URL}/api/me`, { credentials: 'include' }).then(res => res.status === 401 ? null : res.json()).then(user => { if(user) { currentOfficer = user; updateOfficerBar(); } }).catch(()=>{}); }
-function logout() { fetch(`${API_URL}/api/logout`, { method: 'POST', credentials: 'include' }).then(() => { currentOfficer = null; updateOfficerBar(); showToast('Logged out', 'info'); }); }
+
+function showToast(msg, type) { 
+    const toast = document.createElement('div'); 
+    toast.textContent = msg; 
+    toast.style.cssText = `position:fixed;bottom:100px;right:30px;background:${type==='success'?'#2a5a3a':'#dc2626'};color:white;padding:12px 24px;border-radius:8px;z-index:2000`; 
+    document.body.appendChild(toast); 
+    setTimeout(()=>toast.remove(),3000); 
+}
+
+function showMessage(msg, type) { 
+    const div = document.getElementById('entryMessage'); 
+    div.innerHTML = `<div style="padding:10px;background:${type==='success'?'#d1fae5':'#fee2e2'};color:${type==='success'?'#065f46':'#991b1b'}">${msg}</div>`; 
+    setTimeout(()=>div.innerHTML='',3000); 
+}
+
+function updateOfficerBar() { 
+    if(currentOfficer) { 
+        document.getElementById('officerBar').style.display = 'block'; 
+        document.getElementById('officerName').textContent = currentOfficer.full_name || currentOfficer.username; 
+        const badge = document.getElementById('officerDistrict'); 
+        if(currentOfficer.district) badge.textContent = `${currentOfficer.district.toUpperCase()} District Water Officer`; 
+        else if(currentOfficer.role === 'admin') badge.textContent = 'System Administrator'; 
+        else badge.textContent = 'District Water Officer'; 
+        document.getElementById('dataEntryButton').style.display = 'block'; 
+    } else { 
+        document.getElementById('officerBar').style.display = 'none'; 
+        document.getElementById('dataEntryButton').style.display = 'none'; 
+    } 
+}
+
+function checkOfficerSession() { 
+    fetch(`${API_URL}/api/me`, { credentials: 'include' }).then(res => res.status === 401 ? null : res.json()).then(user => { 
+        if(user) { currentOfficer = user; updateOfficerBar(); } 
+    }).catch(()=>{}); 
+}
+
+function logout() { 
+    fetch(`${API_URL}/api/logout`, { method: 'POST', credentials: 'include' }).then(() => { 
+        currentOfficer = null; updateOfficerBar(); showToast('Logged out', 'info'); 
+    }); 
+}
 
 document.getElementById('officerLoginForm')?.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -538,13 +673,58 @@ document.getElementById('officerLoginForm')?.addEventListener('submit', (e) => {
     }).catch(() => { document.getElementById('officerLoginError').textContent = 'Login failed'; });
 });
 
+// UPDATED FORM SUBMISSION WITH GPS VALIDATION
 document.getElementById('dataEntryForm')?.addEventListener('submit', (e) => {
     e.preventDefault();
-    const data = { district: document.getElementById('entryDistrict').value, name: document.getElementById('entryName').value, ta: document.getElementById('entryTA').value, type: document.getElementById('entryType').value, status: document.getElementById('entryStatus').value, latitude: document.getElementById('entryLat').value, longitude: document.getElementById('entryLng').value, officer_name: document.getElementById('entryOfficer').value || currentOfficer?.username, notes: document.getElementById('entryNotes').value };
-    if(!data.district || !data.name || !data.ta || !data.type || !data.status) { showMessage('Please fill all required fields', 'error'); return; }
-    fetch(`${API_URL}/api/add-water-point`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data), credentials: 'include' })
-        .then(res => res.json()).then(result => { if(result.success) { showMessage('Water point added successfully!', 'success'); setTimeout(()=>{ closeDataEntryModal(); if(document.getElementById('tableSelect')?.value === data.district) fetchData(data.district); },1500); } else { showMessage(result.error || 'Error', 'error'); } })
-        .catch(() => { showMessage('Network error', 'error'); });
+    
+    const lat = document.getElementById('entryLat').value;
+    const lng = document.getElementById('entryLng').value;
+    
+    if (!lat || !lng) {
+        showMessage('❌ Please capture GPS location using the GPS button before submitting', 'error');
+        return;
+    }
+    
+    const data = { 
+        district: document.getElementById('entryDistrict').value, 
+        name: document.getElementById('entryName').value, 
+        ta: document.getElementById('entryTA').value, 
+        type: document.getElementById('entryType').value, 
+        status: document.getElementById('entryStatus').value, 
+        latitude: lat, 
+        longitude: lng, 
+        officer_name: document.getElementById('entryOfficer').value || currentOfficer?.username, 
+        notes: document.getElementById('entryNotes').value,
+        gps_accuracy: currentGpsLocation?.accuracy || null
+    };
+    
+    if(!data.district || !data.name || !data.ta || !data.type || !data.status) { 
+        showMessage('Please fill all required fields', 'error'); 
+        return; 
+    }
+    
+    fetch(`${API_URL}/api/add-water-point`, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(data), 
+        credentials: 'include'
+    })
+    .then(res => res.json())
+    .then(result => { 
+        if(result.success) { 
+            showMessage('✅ Water point added successfully with GPS coordinates!', 'success'); 
+            setTimeout(()=>{ 
+                closeDataEntryModal(); 
+                if(document.getElementById('tableSelect')?.value === data.district) 
+                    fetchData(data.district); 
+            },1500); 
+        } else { 
+            showMessage(result.error || 'Error', 'error'); 
+        } 
+    })
+    .catch(() => { 
+        showMessage('Network error', 'error'); 
+    });
 });
 
 if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').then(()=>console.log('SW registered')).catch(err=>console.log('SW failed:', err)); }

@@ -144,6 +144,44 @@ app.post('/api/add-water-point', authenticateToken, (req, res) => {
     if (req.user.role !== 'admin' && req.user.district !== district) {
         return res.status(403).json({ error: 'You can only add water points to your assigned district' });
     }
+
+    app.post('/api/add-water-point', authenticateToken, (req, res) => {
+    const { district, name, ta, type, status, latitude, longitude, officer_name, notes, gps_accuracy } = req.body;
+    
+    if (req.user.role !== 'admin' && req.user.district !== district) {
+        return res.status(403).json({ error: 'You can only add water points to your assigned district' });
+    }
+    
+    // Validate GPS coordinates
+    if (!latitude || !longitude) {
+        return res.status(400).json({ error: 'GPS coordinates are required' });
+    }
+    
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+    
+    if (isNaN(lat) || isNaN(lng)) {
+        return res.status(400).json({ error: 'Invalid GPS coordinates' });
+    }
+    
+    // Log GPS accuracy for quality control (optional)
+    if (gps_accuracy) {
+        console.log(`[GPS] Water point "${name}" in ${district} has accuracy: ${gps_accuracy}m`);
+    }
+    
+    const water_point_id = `WP_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const tableName = district.toLowerCase();
+    
+    const query = `INSERT INTO ${tableName} (water_point_id, Name, Type, TA, Functionality_Status, Latitude, Longitude) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+    
+    executeQuery(query, [water_point_id, name, type, ta, status, latitude, longitude], (err, result) => {
+        if (err) {
+            console.error('Error adding water point:', err);
+            return res.status(500).json({ error: 'Database error: ' + err.message });
+        }
+        res.json({ success: true, water_point_id });
+    });
+});
     
     const water_point_id = `WP_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const tableName = district.toLowerCase();
