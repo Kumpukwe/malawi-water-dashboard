@@ -69,7 +69,6 @@
             font-size: 0.9rem;
         }
 
-        /* Officer Bar */
         .officer-bar {
             background: #2a5a3a;
             color: white;
@@ -117,7 +116,6 @@
             cursor: pointer;
         }
 
-        /* Main Tabs */
         .main-tabs {
             display: flex;
             gap: 12px;
@@ -146,7 +144,6 @@
             color: white;
         }
 
-        /* Sub Tabs */
         .sub-tabs {
             display: flex;
             gap: 8px;
@@ -176,7 +173,6 @@
             color: white;
         }
 
-        /* Content Containers */
         .main-content {
             display: none;
         }
@@ -318,7 +314,6 @@
             margin-top: 30px;
         }
 
-        /* Modal Styles */
         .modal {
             display: none;
             position: fixed;
@@ -392,7 +387,6 @@
             z-index: 1000;
         }
 
-        /* Alerts Styles */
         .alerts-container {
             background: white;
             border-radius: 12px;
@@ -472,19 +466,6 @@
         .alert-rate.critical { color: #dc2626; }
         .alert-rate.warning { color: #d97706; }
 
-        .ta-selector {
-            margin-bottom: 20px;
-        }
-
-        .ta-selector select {
-            width: 100%;
-            max-width: 300px;
-            padding: 10px;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-        }
-
-        /* Trends Section Styles */
         .trends-container {
             background: white;
             border-radius: 12px;
@@ -509,6 +490,7 @@
         .trend-controls {
             display: flex;
             gap: 10px;
+            flex-wrap: wrap;
         }
 
         .trend-metrics-grid {
@@ -551,11 +533,6 @@
             margin-top: 5px;
         }
 
-        .monthly-summary h3 {
-            margin-bottom: 15px;
-            color: #1e3c2c;
-        }
-
         .summary-table {
             width: 100%;
             font-size: 0.85rem;
@@ -576,7 +553,6 @@
             color: #6b7280;
         }
 
-        /* GPS Button Styles */
         .gps-container {
             background: #f9fafb;
             padding: 15px;
@@ -606,14 +582,9 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
 
-        .gps-btn:active {
-            transform: translateY(0);
-        }
-
         .gps-btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
-            transform: none;
         }
 
         .gps-status {
@@ -624,20 +595,9 @@
             border-radius: 6px;
         }
 
-        .gps-status.loading {
-            background: #e0f2fe;
-            color: #0369a1;
-        }
-
-        .gps-status.success {
-            background: #d1fae5;
-            color: #065f46;
-        }
-
-        .gps-status.error {
-            background: #fee2e2;
-            color: #991b1b;
-        }
+        .gps-status.loading { background: #e0f2fe; color: #0369a1; }
+        .gps-status.success { background: #d1fae5; color: #065f46; }
+        .gps-status.error { background: #fee2e2; color: #991b1b; }
 
         .gps-coordinates {
             margin-top: 15px;
@@ -654,143 +614,37 @@
             border-bottom: 1px solid #f0f0f0;
         }
 
-        .coord-row:last-child {
-            border-bottom: none;
-        }
-
-        .coord-label {
-            font-weight: 600;
-            color: #4b5563;
-        }
-
-        .coord-value {
-            font-family: 'Courier New', monospace;
-            font-weight: bold;
-            color: #1e3c2c;
-        }
-
-        .coord-unit {
-            font-size: 0.75rem;
-            color: #6b7280;
-            margin-left: 4px;
-        }
-
-        .form-hint {
-            display: block;
-            margin-top: 8px;
-            font-size: 0.75rem;
-            color: #6b7280;
-        }
-
-        .full-width {
-            grid-column: 1 / -1;
-        }
+        .coord-row:last-child { border-bottom: none; }
+        .coord-label { font-weight: 600; color: #4b5563; }
+        .coord-value { font-family: 'Courier New', monospace; font-weight: bold; color: #1e3c2c; }
+        .coord-unit { font-size: 0.75rem; color: #6b7280; margin-left: 4px; }
+        .form-hint { display: block; margin-top: 8px; font-size: 0.75rem; color: #6b7280; }
+        .full-width { grid-column: 1 / -1; }
 
         .submit-btn, .cancel-btn {
             padding: 10px 20px;
             border-radius: 6px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
         }
-
-        .submit-btn {
-            background: #2a5a3a;
-            color: white;
-            border: none;
-        }
-
-        .submit-btn:hover {
-            background: #1e3c2c;
-            transform: translateY(-1px);
-        }
-
-        .cancel-btn {
-            background: white;
-            color: #6b7280;
-            border: 1px solid #d1d5db;
-        }
-
-        .cancel-btn:hover {
-            background: #f9fafb;
-        }
-
-        .spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
+        .submit-btn { background: #2a5a3a; color: white; border: none; }
+        .cancel-btn { background: white; color: #6b7280; border: 1px solid #d1d5db; }
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
         @media (max-width: 768px) {
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 10px;
-            }
-            
-            .stat-card .number {
-                font-size: 1.3rem;
-            }
-            
-            .main-tab, .sub-tab {
-                padding: 8px 12px;
-                font-size: 0.8rem;
-            }
-            
-            .alert-card {
-                flex-direction: column;
-                text-align: center;
-                gap: 8px;
-            }
-            
-            .header-content {
-                gap: 10px;
-            }
-            
-            .baseflow-logo {
-                height: 40px;
-            }
-            
-            .mw-flag {
-                height: 35px;
-            }
-            
-            header h1 {
-                font-size: 1.2rem;
-            }
-            
-            #map {
-                height: 300px;
-            }
-
-            .trends-header {
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .trend-controls {
-                flex-direction: column;
-            }
-
-            .trend-metrics-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-
-            .gps-btn {
-                padding: 10px 16px;
-                font-size: 0.9rem;
-            }
-            
-            .coord-row {
-                font-size: 0.85rem;
-            }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+            .stat-card .number { font-size: 1.3rem; }
+            .main-tab, .sub-tab { padding: 8px 12px; font-size: 0.8rem; }
+            .alert-card { flex-direction: column; text-align: center; gap: 8px; }
+            .header-content { gap: 10px; }
+            .baseflow-logo { height: 40px; }
+            .mw-flag { height: 35px; }
+            header h1 { font-size: 1.2rem; }
+            #map { height: 300px; }
+            .trends-header { flex-direction: column; align-items: stretch; }
+            .trend-controls { flex-direction: column; }
+            .trend-metrics-grid { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
 </head>
@@ -807,12 +661,10 @@
             </div>
         </header>
 
-        <!-- Login Button -->
         <div id="loginButton" style="text-align: right; margin-bottom: 10px;">
             <button onclick="showOfficerLogin()" class="login-btn">🔐 Officer Login</button>
         </div>
         
-        <!-- Officer Bar -->
         <div id="officerBar" style="display: none;" class="officer-bar">
             <div class="officer-info">
                 <span>👤 <strong id="officerName"></strong></span>
@@ -821,13 +673,12 @@
             <button onclick="logout()" class="logout-small">Logout</button>
         </div>
 
-        <!-- Main Tabs -->
         <div class="main-tabs">
             <button class="main-tab active" onclick="switchMainTab('district')">🏘️ District View</button>
             <button class="main-tab" onclick="switchMainTab('national')">🇲🇼 National View</button>
         </div>
 
-        <!-- ============ DISTRICT VIEW ============ -->
+        <!-- DISTRICT VIEW -->
         <div id="districtMain" class="main-content active">
             <div class="sub-tabs">
                 <button class="sub-tab active" onclick="switchSubTab('district', 'dashboard')">📊 Dashboard</button>
@@ -835,7 +686,6 @@
                 <button class="sub-tab" onclick="switchSubTab('district', 'trends')">📈 Trends</button>
             </div>
             
-            <!-- District Dashboard -->
             <div id="districtDashboard" class="sub-content active">
                 <div class="stats-grid" id="districtStats">
                     <div class="stat-card"><h3>Total Water Points</h3><div class="number" id="cardTotal">0</div></div>
@@ -867,7 +717,6 @@
                 <div class="table-container" id="tableContainer"><h2>Summary</h2><p>Loading data...</p></div>
             </div>
             
-            <!-- TA Alerts -->
             <div id="districtTAAlerts" class="sub-content">
                 <div class="alerts-container">
                     <h2>📍 Traditional Authority Alerts</h2>
@@ -876,7 +725,6 @@
                 </div>
             </div>
 
-            <!-- Trends -->
             <div id="districtTrends" class="sub-content">
                 <div class="trends-container">
                     <div class="trends-header">
@@ -888,6 +736,7 @@
                                 <option value="1year">Last Year</option>
                             </select>
                             <button class="export-btn" onclick="exportTrendReport()">📊 Export Report</button>
+                            <button class="export-btn" onclick="initializeTrends()" style="background: #2563eb;">🔄 Initialize Trends</button>
                         </div>
                     </div>
                     
@@ -898,9 +747,7 @@
                         <div class="metric-card"><h4>Worst Month</h4><div class="metric-value" id="worstMonth">--</div><div class="metric-label" id="worstRate">--</div></div>
                     </div>
                     
-                    <div class="chart-container">
-                        <canvas id="trendChart"></canvas>
-                    </div>
+                    <div class="chart-container"><canvas id="trendChart"></canvas></div>
                     
                     <div class="table-container" id="monthlySummaryContainer">
                         <h3>Monthly Performance Summary</h3>
@@ -910,14 +757,13 @@
             </div>
         </div>
 
-        <!-- ============ NATIONAL VIEW ============ -->
+        <!-- NATIONAL VIEW -->
         <div id="nationalMain" class="main-content">
             <div class="sub-tabs">
                 <button class="sub-tab active" onclick="switchSubTab('national', 'dashboard')">📊 Dashboard</button>
                 <button class="sub-tab" onclick="switchSubTab('national', 'district-alerts')">🔴 District Alerts</button>
             </div>
             
-            <!-- National Dashboard -->
             <div id="nationalDashboard" class="sub-content active">
                 <div class="stats-grid" id="nationalStats">
                     <div class="stat-card"><h3>Total Water Points</h3><div class="number" id="natCardTotal">0</div></div>
@@ -930,7 +776,6 @@
                 <div class="table-container" id="nationalTableContainer"><h2>National Summary Table</h2><p>Loading data...</p></div>
             </div>
             
-            <!-- District Alerts -->
             <div id="nationalDistrictAlerts" class="sub-content">
                 <div class="alerts-container">
                     <h2>🏘️ District Alerts - National Level</h2>
@@ -974,30 +819,18 @@
                         <label>District *</label>
                         <select id="entryDistrict" required>
                             <option value="">Select District</option>
-                            <option value="nsanje">Nsanje</option>
-                            <option value="chikwawa">Chikwawa</option>
-                            <option value="blantyre">Blantyre</option>
-                            <option value="chiradzulo">Chiradzulo</option>
-                            <option value="thyolo">Thyolo</option>
-                            <option value="mulanje">Mulanje</option>
-                            <option value="phalombe">Phalombe</option>
-                            <option value="zomba">Zomba</option>
-                            <option value="machinga">Machinga</option>
-                            <option value="mangochi">Mangochi</option>
-                            <option value="balaka">Balaka</option>
-                            <option value="ntcheu">Ntcheu</option>
-                            <option value="dedza">Dedza</option>
-                            <option value="salima">Salima</option>
-                            <option value="lilongwe">Lilongwe</option>
-                            <option value="mchinji">Mchinji</option>
-                            <option value="dowa">Dowa</option>
-                            <option value="ntchisi">Ntchisi</option>
-                            <option value="kasungu">Kasungu</option>
-                            <option value="nkhotakota">Nkhotakota</option>
-                            <option value="nkhatabay">Nkhatabay</option>
-                            <option value="mzimba">Mzimba</option>
-                            <option value="karonga">Karonga</option>
-                            <option value="chitipa">Chitipa</option>
+                            <option value="nsanje">Nsanje</option><option value="chikwawa">Chikwawa</option>
+                            <option value="blantyre">Blantyre</option><option value="chiradzulo">Chiradzulo</option>
+                            <option value="thyolo">Thyolo</option><option value="mulanje">Mulanje</option>
+                            <option value="phalombe">Phalombe</option><option value="zomba">Zomba</option>
+                            <option value="machinga">Machinga</option><option value="mangochi">Mangochi</option>
+                            <option value="balaka">Balaka</option><option value="ntcheu">Ntcheu</option>
+                            <option value="dedza">Dedza</option><option value="salima">Salima</option>
+                            <option value="lilongwe">Lilongwe</option><option value="mchinji">Mchinji</option>
+                            <option value="dowa">Dowa</option><option value="ntchisi">Ntchisi</option>
+                            <option value="kasungu">Kasungu</option><option value="nkhotakota">Nkhotakota</option>
+                            <option value="nkhatabay">Nkhatabay</option><option value="mzimba">Mzimba</option>
+                            <option value="karonga">Karonga</option><option value="chitipa">Chitipa</option>
                             <option value="likoma">Likoma</option>
                         </select>
                     </div>
@@ -1034,7 +867,6 @@
                         </select>
                     </div>
                     
-                    <!-- GPS Section -->
                     <div class="form-group full-width">
                         <label>📍 GPS Location</label>
                         <div class="gps-container">
@@ -1043,19 +875,9 @@
                             </button>
                             <div id="gpsStatus" class="gps-status"></div>
                             <div id="gpsCoordinates" class="gps-coordinates" style="display: none;">
-                                <div class="coord-row">
-                                    <span class="coord-label">Latitude:</span>
-                                    <span id="gpsLat" class="coord-value">-</span>
-                                </div>
-                                <div class="coord-row">
-                                    <span class="coord-label">Longitude:</span>
-                                    <span id="gpsLng" class="coord-value">-</span>
-                                </div>
-                                <div class="coord-row">
-                                    <span class="coord-label">Accuracy:</span>
-                                    <span id="gpsAccuracy" class="coord-value">-</span>
-                                    <span class="coord-unit">meters</span>
-                                </div>
+                                <div class="coord-row"><span class="coord-label">Latitude:</span><span id="gpsLat" class="coord-value">-</span></div>
+                                <div class="coord-row"><span class="coord-label">Longitude:</span><span id="gpsLng" class="coord-value">-</span></div>
+                                <div class="coord-row"><span class="coord-label">Accuracy:</span><span id="gpsAccuracy" class="coord-value">-</span><span class="coord-unit">meters</span></div>
                             </div>
                             <input type="hidden" id="entryLat" required>
                             <input type="hidden" id="entryLng" required>
